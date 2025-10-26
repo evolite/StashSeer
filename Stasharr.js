@@ -764,27 +764,72 @@ async function downloadVideo(whisparrScene) {
 }
 
 async function getLocalStashSceneIdByStashId(stashId) {
-  const stashRes = await localStashGraphQl({
-      "variables": {
-        "scene_filter": {
-          "stash_id_endpoint": {
-            "endpoint": "",
-            "modifier": "EQUALS",
-            "stash_id": stashId
-          }
-        }
-      },
-      query: `
-        query ($scene_filter: SceneFilterType) {
-          findScenes(scene_filter: $scene_filter) {
-            scenes {
-              id
+  // Try multiple approaches to find the scene in Stash
+  
+  // First try: Search by stash_id_endpoint
+  try {
+    const stashRes = await localStashGraphQl({
+        "variables": {
+          "scene_filter": {
+            "stash_id_endpoint": {
+              "endpoint": "",
+              "modifier": "EQUALS",
+              "stash_id": stashId
             }
           }
-        }
-      `
-  });
-  return stashRes.data.findScenes.scenes[0]?.id
+        },
+        query: `
+          query ($scene_filter: SceneFilterType) {
+            findScenes(scene_filter: $scene_filter) {
+              scenes {
+                id
+                stash_id
+              }
+            }
+          }
+        `
+      }
+    );
+    const scene = stashRes.data.findScenes.scenes[0];
+    if (scene) {
+      return scene.id;
+    }
+  } catch (error) {
+    console.log("Stash search by stash_id_endpoint failed:", error);
+  }
+  
+  // Second try: Search by stash_id field directly
+  try {
+    const stashRes = await localStashGraphQl({
+        "variables": {
+          "scene_filter": {
+            "stash_id": {
+              "modifier": "EQUALS",
+              "value": stashId
+            }
+          }
+        },
+        query: `
+          query ($scene_filter: SceneFilterType) {
+            findScenes(scene_filter: $scene_filter) {
+              scenes {
+                id
+                stash_id
+              }
+            }
+          }
+        `
+      }
+    );
+    const scene = stashRes.data.findScenes.scenes[0];
+    if (scene) {
+      return scene.id;
+    }
+  } catch (error) {
+    console.log("Stash search by stash_id field failed:", error);
+  }
+  
+  return null;
 }
 
 async function getLocalStashSceneId(whisparrScene) {
