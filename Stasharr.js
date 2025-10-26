@@ -46,6 +46,8 @@ const whisparrRootFolderPath = config.whisparrRootFolderPath
 const localStashRootUrl = config.localStashRootUrl
 const localStashGraphQlEndpoint = localStashRootUrl + '/graphql'
 const localStashAuthHeaders = {'ApiKey': config.stashApiKey}
+console.log("Stash API Key configured:", config.stashApiKey ? "Yes" : "No")
+console.log("Stash Auth Headers:", localStashAuthHeaders)
 
 ;(async function() {
     'use strict';
