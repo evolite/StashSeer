@@ -47,7 +47,7 @@ function setConfig(config) {
 
 // Constants
 const POLLING_INTERVAL_MS = 50;
-const SEARCH_TRIGGER_DELAY_MS = 5000;
+const SEARCH_TRIGGER_DELAY_MS = 2000;
 const DEFAULT_QUALITY_PROFILE_ID = 1;
 
 // Get current configuration
