@@ -430,6 +430,7 @@ async function checkIfAvaliable(stashId, updateStatus) {
       console.log("Connecting to Whisparr...")
       whisparrScene = await ensureSceneAdded(stashId)
       console.log("✅ Whisparr connection successful, scene:", whisparrScene)
+      console.log("Scene properties - hasFile:", whisparrScene.hasFile, "monitored:", whisparrScene.monitored, "queueStatus:", whisparrScene.queueStatus)
     } catch(error) {
       console.error("❌ Whisparr connection failed:", error)
       updateStatus({
@@ -460,9 +461,11 @@ async function checkIfAvaliable(stashId, updateStatus) {
         console.log("Scene not found in Stash, showing monitored status")
       }
     } else if (whisparrScene.monitored) {
+      console.log("Scene is monitored, showing monitored status")
       updateStatusToMonitored()
       return
     } else if (whisparrScene.queueStatus) {
+      console.log("Scene is in download queue, showing downloading status")
       updateStatus({
         button: `${icons.loading}<span>Downloading</span>`,
         className: "btn-loading",
