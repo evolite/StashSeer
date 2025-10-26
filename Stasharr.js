@@ -423,9 +423,12 @@ async function checkIfAvaliable(stashId, updateStatus) {
     })
 
     try {
+      console.log("Checking Stash for stashId:", stashId)
       const localStashSceneId = await getLocalStashSceneIdByStashId(stashId)
+      console.log("Stash scene ID found:", localStashSceneId)
       if (localStashSceneId) {
         const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
+        console.log("Scene found in Stash, showing Play button:", stashUrl)
         updateStatus({
             button: `${icons.play}<span>Play</span>`,
             className: "btn-play",
@@ -433,6 +436,8 @@ async function checkIfAvaliable(stashId, updateStatus) {
             onClick: () => window.open(stashUrl, '_blank').focus()
         })
         return
+      } else {
+        console.log("Scene not found in Stash, continuing to Whisparr check")
       }
     } catch(error) {
       console.log("Error checking Stash:", error)
