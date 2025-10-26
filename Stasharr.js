@@ -826,13 +826,13 @@ async function getLocalStashSceneIdByStashId(stashId) {
     }
   }
   
-  // Second try: Search by stash_id field directly
+  // Second try: Search by stash_ids field directly
   try {
-    console.log("Trying stash_id field search for:", stashId)
+    console.log("Trying stash_ids field search for:", stashId)
     const stashRes = await localStashGraphQl({
         "variables": {
           "scene_filter": {
-            "stash_id": {
+            "stash_ids": {
               "modifier": "EQUALS",
               "value": stashId
             }
@@ -843,37 +843,37 @@ async function getLocalStashSceneIdByStashId(stashId) {
             findScenes(scene_filter: $scene_filter) {
               scenes {
                 id
-                stash_id
+                stash_ids
               }
             }
           }
         `
       }
     );
-    console.log("Stash GraphQL response (stash_id):", stashRes)
+    console.log("Stash GraphQL response (stash_ids):", stashRes)
     const scene = stashRes.data.findScenes.scenes[0];
     if (scene) {
-      console.log("Found scene via stash_id field:", scene.id)
+      console.log("Found scene via stash_ids field:", scene.id)
       return scene.id;
     }
   } catch (error) {
-    console.log("Stash search by stash_id field failed:", error);
+    console.log("Stash search by stash_ids field failed:", error);
     console.log("Error details:", error.resBody);
     if (error.resBody && error.resBody.errors) {
       console.log("GraphQL errors:", error.resBody.errors);
     }
   }
   
-  // Third try: Search by stash_id_endpoint
+  // Third try: Search by stash_ids_endpoint
   try {
-    console.log("Trying stash_id_endpoint search for:", stashId)
+    console.log("Trying stash_ids_endpoint search for:", stashId)
     const stashRes = await localStashGraphQl({
         "variables": {
           "scene_filter": {
-            "stash_id_endpoint": {
+            "stash_ids_endpoint": {
               "endpoint": "",
               "modifier": "EQUALS",
-              "stash_id": stashId
+              "stash_ids": stashId
             }
           }
         },
@@ -882,21 +882,21 @@ async function getLocalStashSceneIdByStashId(stashId) {
             findScenes(scene_filter: $scene_filter) {
               scenes {
                 id
-                stash_id
+                stash_ids
               }
             }
           }
         `
       }
     );
-    console.log("Stash GraphQL response (stash_id_endpoint):", stashRes)
+    console.log("Stash GraphQL response (stash_ids_endpoint):", stashRes)
     const scene = stashRes.data.findScenes.scenes[0];
     if (scene) {
-      console.log("Found scene via stash_id_endpoint:", scene.id)
+      console.log("Found scene via stash_ids_endpoint:", scene.id)
       return scene.id;
     }
   } catch (error) {
-    console.log("Stash search by stash_id_endpoint failed:", error);
+    console.log("Stash search by stash_ids_endpoint failed:", error);
     console.log("Error details:", error.resBody);
     if (error.resBody && error.resBody.errors) {
       console.log("GraphQL errors:", error.resBody.errors);
@@ -912,10 +912,10 @@ async function getLocalStashSceneId(whisparrScene) {
   const stashRes = await localStashGraphQl({
       "variables": {
         "scene_filter": {
-          "stash_id_endpoint": {
+          "stash_ids_endpoint": {
             "endpoint": "",
             "modifier": "EQUALS",
-            "stash_id": whisparrScene.stashId
+            "stash_ids": whisparrScene.stashId
           }
         }
       },
