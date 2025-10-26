@@ -637,13 +637,16 @@ async function monitorScene(monitor, whisparrScene) {
 
   // If we're enabling monitoring, trigger a MoviesSearch to find missing movies
   if (monitor) {
-    try {
-      await triggerMoviesSearch();
-      console.log("MoviesSearch triggered after enabling monitoring");
-    } catch (error) {
-      console.error("Failed to trigger MoviesSearch:", error);
-      // Don't throw error here - monitoring was successful, search failure is not critical
-    }
+    // Wait 5 seconds to let Whisparr process the monitoring change
+    setTimeout(async () => {
+      try {
+        await triggerMoviesSearch();
+        console.log("MoviesSearch triggered after enabling monitoring (5s delay)");
+      } catch (error) {
+        console.error("Failed to trigger MoviesSearch:", error);
+        // Don't throw error here - monitoring was successful, search failure is not critical
+      }
+    }, 5000);
   }
 
   return result;
