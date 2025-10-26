@@ -9,21 +9,43 @@
 // @icon.disabled         https://www.google.com/s2/favicons?sz=64&domain=stashdb.org
 // @updateURL
 // @grant        GM_addStyle
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
-// Configuration - Update these values or set them via environment variables
-// For browser userscript, you'll need to manually update these values
-// For Node.js usage, you can use process.env variables
+// Configuration - Uses Tampermonkey storage API
+// First time setup: Click the Settings button to configure your API keys
+// Values persist across browser sessions
 
-const whisparrBaseUrl = process.env.WHISPARR_BASE_URL || 'http://localhost:6969' // Root url of Whisparr v3 instance to use
-const whisparrApiKey = process.env.WHISPARR_API_KEY || "1d6a9a4a54664a6c87cc71a42727c6b9" // API key of above Whisparr instance
-const whisparrNewSiteTags = process.env.WHISPARR_NEW_SITE_TAGS ? process.env.WHISPARR_NEW_SITE_TAGS.split(',').map(Number) : [1] // Array of IDs of tags in Whisparr that added scenes should be tagged with
-const whisparrRootFolderPath = process.env.WHISPARR_ROOT_FOLDER_PATH || "/data/" // Root folder path for downloaded scenes in Whisparr
+function getConfig() {
+  return {
+    whisparrBaseUrl: GM_getValue('whisparrBaseUrl', 'http://localhost:6969'),
+    whisparrApiKey: GM_getValue('whisparrApiKey', ''),
+    whisparrNewSiteTags: GM_getValue('whisparrNewSiteTags', [1]),
+    whisparrRootFolderPath: GM_getValue('whisparrRootFolderPath', '/data/'),
+    localStashRootUrl: GM_getValue('localStashRootUrl', 'http://localhost:9999'),
+    stashApiKey: GM_getValue('stashApiKey', '')
+  }
+}
 
-// Stash Config
-const localStashRootUrl = process.env.STASH_ROOT_URL || 'http://localhost:9999'
-const localStashGraphQlEndpoint = localStashRootUrl + '/graphql' // Stash graphql endpoint used for fetching url of downloaded scene
-const localStashAuthHeaders = {'ApiKey': process.env.STASH_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJldm90ZWNoIiwic3ViIjoiQVBJS2V5IiwiaWF0IjoxNzI1OTc1MzAzfQ.S-SaRNjjHxqHTNBF_deQF9FMyNemWDc-ssTQMLlDu4M'} // Any headers that should be supplied when sending requests to stash
+function setConfig(config) {
+  GM_setValue('whisparrBaseUrl', config.whisparrBaseUrl)
+  GM_setValue('whisparrApiKey', config.whisparrApiKey)
+  GM_setValue('whisparrNewSiteTags', config.whisparrNewSiteTags)
+  GM_setValue('whisparrRootFolderPath', config.whisparrRootFolderPath)
+  GM_setValue('localStashRootUrl', config.localStashRootUrl)
+  GM_setValue('stashApiKey', config.stashApiKey)
+}
+
+// Get current configuration
+const config = getConfig()
+const whisparrBaseUrl = config.whisparrBaseUrl
+const whisparrApiKey = config.whisparrApiKey
+const whisparrNewSiteTags = config.whisparrNewSiteTags
+const whisparrRootFolderPath = config.whisparrRootFolderPath
+const localStashRootUrl = config.localStashRootUrl
+const localStashGraphQlEndpoint = localStashRootUrl + '/graphql'
+const localStashAuthHeaders = {'ApiKey': config.stashApiKey}
 
 ;(async function() {
     'use strict';
@@ -148,6 +170,17 @@ body {
   border-color: rgba(156, 39, 176, 0.5);
 }
 
+.downloadInWhisparr button.btn-settings {
+  background: rgba(108, 117, 125, 0.15);
+  border-color: rgba(108, 117, 125, 0.3);
+  color: #adb5bd;
+}
+
+.downloadInWhisparr button.btn-settings:hover {
+  background: rgba(108, 117, 125, 0.25);
+  border-color: rgba(108, 117, 125, 0.5);
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -188,13 +221,15 @@ const icons = {
   monitorOff: `<svg viewBox="0 0 16 16"><path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7.028 7.028 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z"/><path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829l.822.822zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z"/><path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7.029 7.029 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12-.708.708z"/></svg>`,
   error: `<svg viewBox="0 0 16 16"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`,
   check: `<svg viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>`,
-  whisparr: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/></svg>`
+  whisparr: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/></svg>`,
+  settings: `<svg viewBox="0 0 16 16"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319z"/></svg>`
 };
 
 function createButton() {
   const containerElm = document.createElement("div");
   const dlButtonElm = document.createElement("button");
   const whisparrButtonElm = document.createElement("button");
+  const settingsButtonElm = document.createElement("button");
   const statusElm = document.createElement("span");
   containerElm.classList.add("downloadInWhisparr")
   dlButtonElm.innerHTML = `${icons.loading}<span>Loading...</span>`
@@ -205,6 +240,13 @@ function createButton() {
   whisparrButtonElm.classList.add("btn-whisparr")
   whisparrButtonElm.addEventListener("click", () => {
     window.open(whisparrBaseUrl, '_blank').focus()
+  })
+
+  // Add Settings button
+  settingsButtonElm.innerHTML = `${icons.settings}<span>Settings</span>`
+  settingsButtonElm.classList.add("btn-settings")
+  settingsButtonElm.addEventListener("click", () => {
+    showSettingsDialog()
   })
 
   let lastOnClickValue
@@ -235,8 +277,109 @@ function createButton() {
   updateStatus("Loading...")
   containerElm.appendChild(dlButtonElm)
   containerElm.appendChild(whisparrButtonElm)
+  containerElm.appendChild(settingsButtonElm)
   containerElm.appendChild(statusElm)
   return {downloadElm: containerElm, updateStatus}
+}
+
+function showSettingsDialog() {
+  const currentConfig = getConfig()
+  
+  const dialog = document.createElement('div')
+  dialog.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `
+  
+  const content = document.createElement('div')
+  content.style.cssText = `
+    background: #2d3748;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    max-width: 500px;
+    width: 90%;
+    color: white;
+  `
+  
+  content.innerHTML = `
+    <h3 style="margin-top: 0; color: #4d9fff;">Stasharr Settings</h3>
+    <form id="settingsForm">
+      <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr Base URL:</label>
+        <input type="text" name="whisparrBaseUrl" value="${currentConfig.whisparrBaseUrl}" 
+               style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr API Key:</label>
+        <input type="password" name="whisparrApiKey" value="${currentConfig.whisparrApiKey}" 
+               style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Stash Root URL:</label>
+        <input type="text" name="localStashRootUrl" value="${currentConfig.localStashRootUrl}" 
+               style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Stash API Key:</label>
+        <input type="password" name="stashApiKey" value="${currentConfig.stashApiKey}" 
+               style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Root Folder Path:</label>
+        <input type="text" name="whisparrRootFolderPath" value="${currentConfig.whisparrRootFolderPath}" 
+               style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">New Site Tags (comma-separated):</label>
+        <input type="text" name="whisparrNewSiteTags" value="${currentConfig.whisparrNewSiteTags.join(',')}" 
+               style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
+      </div>
+      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <button type="button" id="cancelBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
+        <button type="submit" style="padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Save</button>
+      </div>
+    </form>
+  `
+  
+  dialog.appendChild(content)
+  document.body.appendChild(dialog)
+  
+  const form = content.querySelector('#settingsForm')
+  const cancelBtn = content.querySelector('#cancelBtn')
+  
+  form.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const formData = new FormData(form)
+    const newConfig = {
+      whisparrBaseUrl: formData.get('whisparrBaseUrl'),
+      whisparrApiKey: formData.get('whisparrApiKey'),
+      localStashRootUrl: formData.get('localStashRootUrl'),
+      stashApiKey: formData.get('stashApiKey'),
+      whisparrRootFolderPath: formData.get('whisparrRootFolderPath'),
+      whisparrNewSiteTags: formData.get('whisparrNewSiteTags').split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+    }
+    setConfig(newConfig)
+    document.body.removeChild(dialog)
+    alert('Settings saved! Refresh the page to apply changes.')
+  })
+  
+  cancelBtn.addEventListener('click', () => {
+    document.body.removeChild(dialog)
+  })
+  
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) {
+      document.body.removeChild(dialog)
+    }
+  })
 }
 
 async function addButtonToScenePage(downloadElm) {
