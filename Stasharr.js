@@ -819,6 +819,10 @@ async function getLocalStashSceneIdByStashId(stashId) {
   } catch (error) {
     console.log("Stash search by stash_id_endpoint failed:", error);
     console.log("Error details:", error.resBody);
+    console.log("Full error object:", error);
+    if (error.resBody && error.resBody.errors) {
+      console.log("GraphQL errors:", error.resBody.errors);
+    }
   }
   
   // Second try: Search by stash_id field directly
@@ -851,6 +855,10 @@ async function getLocalStashSceneIdByStashId(stashId) {
   } catch (error) {
     console.log("Stash search by stash_id field failed:", error);
     console.log("Error details:", error.resBody);
+    console.log("Full error object:", error);
+    if (error.resBody && error.resBody.errors) {
+      console.log("GraphQL errors:", error.resBody.errors);
+    }
   }
   
   return null;
