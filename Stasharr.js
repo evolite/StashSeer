@@ -419,7 +419,29 @@ async function checkIfAvaliable(stashId, updateStatus) {
     
     console.log("=== Starting checkIfAvaliable for stashId:", stashId, "===")
     
-    // First check Whisparr
+    // First check if scene already exists in Stash
+    updateStatus({
+      button: `${icons.loading}<span>Checking Stash...</span>`,
+      className: "btn-loading",
+      extra: ``
+    })
+
+    console.log("Checking Stash first for stashId:", stashId)
+    const localStashSceneId = await getLocalStashSceneIdByStashId(stashId)
+    console.log("Stash scene ID found:", localStashSceneId)
+    if (localStashSceneId) {
+      const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
+      console.log("Scene found in Stash, showing Play button:", stashUrl)
+      updateStatus({
+          button: `${icons.play}<span>Play</span>`,
+          className: "btn-play",
+          extra: "",
+          onClick: () => window.open(stashUrl, '_blank').focus()
+      })
+      return
+    }
+
+    // If not in Stash, check Whisparr
     updateStatus({
       button: `${icons.loading}<span>Checking Whisparr...</span>`,
       className: "btn-loading",
@@ -430,7 +452,6 @@ async function checkIfAvaliable(stashId, updateStatus) {
       console.log("Connecting to Whisparr...")
       whisparrScene = await ensureSceneAdded(stashId)
       console.log("✅ Whisparr connection successful, scene:", whisparrScene)
-      console.log("Scene properties - hasFile:", whisparrScene.hasFile, "monitored:", whisparrScene.monitored, "queueStatus:", whisparrScene.queueStatus)
     } catch(error) {
       console.error("❌ Whisparr connection failed:", error)
       updateStatus({
@@ -441,31 +462,70 @@ async function checkIfAvaliable(stashId, updateStatus) {
       throw error
     }
 
-    // If scene has a file, check if it's in Stash and show Play button
-    if (whisparrScene.hasFile) {
-      console.log("Scene has file, checking Stash for stashId:", whisparrScene.stashId)
-      console.log("Connecting to Stash...")
-      const localStashSceneId = await getLocalStashSceneId(whisparrScene)
-      console.log("✅ Stash connection successful, scene ID:", localStashSceneId)
-      if (localStashSceneId) {
-        const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
-        console.log("Showing Play button for Stash URL:", stashUrl)
+    function updateStatusToMonitored() {
+      updateStatus({
+          button: `${icons.monitor}<span>Monitored</span>`,
+          className: "btn-monitor",
+          extra: "",
+          onClick: async () => {
+            // If scene doesn't exist in Whisparr yet, add it as monitored
+            if (!whisparrScene || !whisparrScene.id) {
+              try {
+                whisparrScene = await ensureSceneAddedAsMonitored(stashId)
+                updateStatusToMonitored()
+                return
+              } catch (error) {
+                console.error("Error adding scene as monitored:", error)
+                return
+              }
+            }
+            
+            // If scene exists, toggle monitoring
+            whisparrScene = await monitorScene(true, whisparrScene)
+            updateStatusToMonitored()
+          }
+      })
+    }
+
+    function updateStatusToUnmonitored() {
         updateStatus({
-            button: `${icons.play}<span>Play</span>`,
-            className: "btn-play",
-            extra: "",
-            onClick: () => window.open(stashUrl, '_blank').focus()
+          button: `${icons.monitorOff}<span>Monitor</span>`,
+          className: "btn-monitor",
+          extra: "",
+          onClick: async () => {
+            // If scene doesn't exist in Whisparr yet, add it as monitored
+            if (!whisparrScene || !whisparrScene.id) {
+              try {
+                whisparrScene = await ensureSceneAddedAsMonitored(stashId)
+                updateStatusToMonitored()
+                return
+              } catch (error) {
+                console.error("Error adding scene as monitored:", error)
+                return
+              }
+            }
+            
+            // If scene exists, toggle monitoring
+            whisparrScene = await monitorScene(true, whisparrScene)
+            updateStatusToMonitored()
+          }
         })
-        return
-      } else {
-        console.log("Scene not found in Stash, showing monitored status")
-      }
+    }
+
+    if (whisparrScene.hasFile) {
+      const localStashSceneId = await getLocalStashSceneId(whisparrScene)
+      const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
+      updateStatus({
+          button: `${icons.play}<span>Play</span>`,
+          className: "btn-play",
+          extra: "",
+          onClick: () => window.open(stashUrl, '_blank').focus()
+      })
+      return
     } else if (whisparrScene.monitored) {
-      console.log("Scene is monitored, showing monitored status")
       updateStatusToMonitored()
       return
     } else if (whisparrScene.queueStatus) {
-      console.log("Scene is in download queue, showing downloading status")
       updateStatus({
         button: `${icons.loading}<span>Downloading</span>`,
         className: "btn-loading",
@@ -474,7 +534,65 @@ async function checkIfAvaliable(stashId, updateStatus) {
       return
     }
 
-    function updateStatusToMonitored() {
+    let fileDownloadAvailablity
+
+    updateStatus({
+      button: `${icons.loading}<span>Checking...</span>`,
+      className: "btn-loading",
+      extra: ``
+    })
+
+    try {
+      fileDownloadAvailablity = await getFileDownloadAvailablity(whisparrScene)
+    } catch(error) {
+      updateStatus({
+        button: `${icons.error}<span>Error</span>`,
+        className: "btn-error",
+        extra: `Error checking if scene available for download`
+      })
+      throw error
+    }
+
+    switch (fileDownloadAvailablity) {
+      case "available for download":
+        updateStatus({
+          button: `${icons.download}<span>Download</span>`,
+          className: "btn-download",
+          extra: "",
+          onClick: async () => {
+            updateStatus({
+              button: `${icons.loading}<span>Downloading</span>`,
+              className: "btn-loading",
+              extra: "Adding to download queue...",
+              onClick: () => {}
+            })
+            await downloadVideo(whisparrScene)
+            updateStatus({
+              extra: `Added to <a href="${whisparrBaseUrl}/activity/queue">download queue</a>.`
+            })
+          }
+        })
+        break;
+      case "already downloading":
+        updateStatus({
+          button: `${icons.loading}<span>Downloading</span>`,
+          className: "btn-loading",
+          extra: `View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`
+        })
+        break;
+      case "not available for download":
+        updateStatusToUnmonitored()
+        break;
+      default:
+        updateStatus({
+          button: `${icons.error}<span>Unknown</span>`,
+          className: "btn-error",
+          extra: "Unknown file availability"
+        })
+    }
+}
+
+function updateStatusToMonitored() {
       updateStatus({
           button: `${icons.monitor}<span>Monitored</span>`,
           className: "btn-monitor",
