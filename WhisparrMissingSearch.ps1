@@ -1,24 +1,14 @@
 # Whisparr Missing Movies Search Script
 # Searches for missing movies in Whisparr
 
-# Load environment variables from .env file if it exists
-if (Test-Path ".env") {
-    Get-Content ".env" | ForEach-Object {
-        if ($_ -match "^([^#][^=]+)=(.*)$") {
-            $name = $matches[1].Trim()
-            $value = $matches[2].Trim()
-            [Environment]::SetEnvironmentVariable($name, $value, "Process")
-        }
-    }
-}
-
-# Get configuration from environment variables with fallbacks
-$whisparrBaseUrl = if ($env:WHISPARR_BASE_URL) { $env:WHISPARR_BASE_URL } else { "http://localhost:6969" }
-$whisparrApiKey = if ($env:WHISPARR_API_KEY) { $env:WHISPARR_API_KEY } else { "" }
+# Configuration - Update these values with your actual settings
+$whisparrBaseUrl = "http://localhost:6969"
+$whisparrApiKey = "your-whisparr-api-key-here"
 
 # Check if API key is configured
-if (-not $whisparrApiKey) {
-    Write-Host "Error: Whisparr API key not configured. Please set WHISPARR_API_KEY in .env file or environment variable." -ForegroundColor Red
+if ($whisparrApiKey -eq "your-whisparr-api-key-here") {
+    Write-Host "Error: Please update the API key in the script before running." -ForegroundColor Red
+    Write-Host "Edit the script and replace 'your-whisparr-api-key-here' with your actual Whisparr API key." -ForegroundColor Yellow
     exit 1
 }
 
