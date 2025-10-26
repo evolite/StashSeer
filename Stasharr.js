@@ -398,10 +398,12 @@ let observer = new MutationObserver(async function(mutations) {
         for (const node of mutation.addedNodes) {
             console.log("added node")
             if (node.nodeType === 1 && (node.classList.contains("scene-info"))) {
+              console.log("🎬 Stasharr script activated - scene page detected")
               console.log("added scene node")
               const {downloadElm, updateStatus} = createButton()
               await addButtonToScenePage(downloadElm)
               const stashId = location.pathname.split("/")[2]
+              console.log("Extracted stashId from URL:", stashId)
               await checkIfAvaliable(stashId, updateStatus)
             }
         }
@@ -415,6 +417,8 @@ observer.observe(document, config);
 async function checkIfAvaliable(stashId, updateStatus) {
     let whisparrScene
     
+    console.log("=== Starting checkIfAvaliable for stashId:", stashId, "===")
+    
     // First check Whisparr
     updateStatus({
       button: `${icons.loading}<span>Checking Whisparr...</span>`,
@@ -423,8 +427,11 @@ async function checkIfAvaliable(stashId, updateStatus) {
     })
 
     try {
+      console.log("Connecting to Whisparr...")
       whisparrScene = await ensureSceneAdded(stashId)
+      console.log("✅ Whisparr connection successful, scene:", whisparrScene)
     } catch(error) {
+      console.error("❌ Whisparr connection failed:", error)
       updateStatus({
         button: `${icons.error}<span>Error</span>`,
         className: "btn-error",
@@ -436,8 +443,9 @@ async function checkIfAvaliable(stashId, updateStatus) {
     // If scene has a file, check if it's in Stash and show Play button
     if (whisparrScene.hasFile) {
       console.log("Scene has file, checking Stash for stashId:", whisparrScene.stashId)
+      console.log("Connecting to Stash...")
       const localStashSceneId = await getLocalStashSceneId(whisparrScene)
-      console.log("Stash scene ID found:", localStashSceneId)
+      console.log("✅ Stash connection successful, scene ID:", localStashSceneId)
       if (localStashSceneId) {
         const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
         console.log("Showing Play button for Stash URL:", stashUrl)
