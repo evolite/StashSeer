@@ -475,6 +475,19 @@ async function checkIfAvaliable(stashId, updateStatus) {
           className: "btn-monitor",
           extra: "",
           onClick: async () => {
+            // If scene doesn't exist in Whisparr yet, add it as monitored
+            if (!whisparrScene || !whisparrScene.id) {
+              try {
+                whisparrScene = await ensureSceneAddedAsMonitored(stashId)
+                updateStatusToMonitored()
+                return
+              } catch (error) {
+                console.error("Error adding scene as monitored:", error)
+                return
+              }
+            }
+            
+            // If scene exists, toggle monitoring
             whisparrScene = await monitorScene(true, whisparrScene)
             updateStatusToMonitored()
           }
@@ -594,6 +607,54 @@ async function ensureSceneAdded(stashId) {
         }
       }
     );
+  } catch(error) {
+    console.error(error.statusCode, error.resBody)
+    throw error
+  }
+}
+
+async function ensureSceneAddedAsMonitored(stashId) {
+  const scenes = await fetchWhisparr("/movie")
+  const scene = scenes.find(scene => scene.stashId === stashId)
+  if (scene) {
+    if (!scene.hasFile) {
+      const queue = await fetchWhisparr("/queue/details?all=true")
+      scene.queueStatus = queue.find(queueItem => queueItem.movieId === scene.id)
+    }
+    return scene
+  }
+
+  try {
+    const newScene = await fetchWhisparr(
+      "/movie",
+      {
+        body: {
+          addOptions: {
+              monitor: "movieOnly",
+              searchForMovie: false,
+          },
+          foreignId: stashId,
+          monitored: true,
+          qualityProfileId: 1,
+          rootFolderPath: whisparrRootFolderPath,
+          stashId: stashId,
+          tags: whisparrNewSiteTags,
+          title: "added via stashdb extention",
+        }
+      }
+    );
+    
+    // Trigger MoviesSearch after 5 seconds for the newly added monitored scene
+    setTimeout(async () => {
+      try {
+        await triggerMoviesSearch([newScene.id]);
+        console.log(`MoviesSearch triggered for newly added monitored movie ${newScene.id} (5s delay)`);
+      } catch (error) {
+        console.error("Failed to trigger MoviesSearch for new scene:", error);
+      }
+    }, 5000);
+    
+    return newScene;
   } catch(error) {
     console.error(error.statusCode, error.resBody)
     throw error
