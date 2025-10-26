@@ -1,36 +1,27 @@
-# Stasharr Config
+# Stasharr
 
-My personal scripts for managing content with StashDB + Whisparr + Stash.
+Tampermonkey script for StashDB integration with Whisparr and Stash.
 
-## What This Does
+## What
 
-- **Stasharr.js** - Tampermonkey script that adds download buttons to StashDB pages
+Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes exist in local Stash or are available in Whisparr.
 
-## Quick Setup
+## Setup
 
-1. **For browser script:** Copy `Stasharr.js` into Tampermonkey, load stashdb.org and click on a scene then click the Settings button to configure
-
-## How It Works
-
-### Stasharr.js (Browser Script)
-- Runs on StashDB.org pages
-- Adds download/monitor/play buttons to scene pages
-- Connects to local Whisparr (port 6969) and Stash (port 9999)
-- Shows real-time status: Download → Monitored → Playing
-- Settings button for easy API key configuration
-- Automatically triggers MoviesSearch when enabling monitoring
-
-## My Config
-
-- **Whisparr:** `http://localhost:6969` (API key in settings)
-- **Stash:** `http://localhost:9999` (API key in settings)
-- **Download path:** `/data/`
-- **Tags:** ID 1 for new scenes
+1. Install Tampermonkey
+2. Add `Stasharr.js` to Tampermonkey
+3. Visit StashDB.org → Click any scene
+4. Click **Settings** button → Configure:
+   - Whisparr URL + API key
+   - Stash URL + API key
+   - Root folder path
+   - Tag IDs for new scenes
 
 ## Usage
 
-**Browser Script:**
-1. Install `Stasharr.js` in Tampermonkey
-2. Click Settings button to configure API keys
-3. Browse StashDB and use download buttons
-4. When you enable monitoring, it automatically searches for missing movies
+Browse StashDB scenes, buttons show:
+- **Play** - Scene exists in local Stash
+- **Download** - Available to download via Whisparr
+- **Monitor** - Enable monitoring (auto-triggers search)
+- **Monitored** - Already being monitored
+- **Downloading** - Currently in queue
