@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.3
 // @description  try to take over the world!
-// @author       You
+// @author       AI Guided, use at your own risk
 // @match        https://stashdb.org/
 // @match        https://stashdb.org/*
 // @icon.disabled         https://www.google.com/s2/favicons?sz=64&domain=stashdb.org
@@ -816,6 +816,7 @@ async function getLocalStashSceneIdByStashId(stashId) {
     }
   } catch (error) {
     console.log("Stash search by stash_id_endpoint failed:", error);
+    console.log("Error details:", error.resBody);
   }
   
   // Second try: Search by stash_id field directly
@@ -847,6 +848,7 @@ async function getLocalStashSceneIdByStashId(stashId) {
     }
   } catch (error) {
     console.log("Stash search by stash_id field failed:", error);
+    console.log("Error details:", error.resBody);
   }
   
   return null;
