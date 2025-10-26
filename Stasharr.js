@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         StashBox - Whisparr v3
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.3.1
 // @description  try to take over the world!
-// @author       AI Guided, use at your own risk
+// @author       evolite
 // @match        https://stashdb.org/
 // @match        https://stashdb.org/*
 // @icon.disabled         https://www.google.com/s2/favicons?sz=64&domain=stashdb.org
