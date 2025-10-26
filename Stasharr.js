@@ -436,25 +436,20 @@ async function checkIfAvaliable(stashId, updateStatus) {
     // If scene has a file, check if it's in Stash and show Play button
     if (whisparrScene.hasFile) {
       console.log("Scene has file, checking Stash for stashId:", whisparrScene.stashId)
-      try {
-        const localStashSceneId = await getLocalStashSceneId(whisparrScene)
-        console.log("Stash scene ID found:", localStashSceneId)
-        if (localStashSceneId) {
-          const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
-          console.log("Showing Play button for Stash URL:", stashUrl)
-          updateStatus({
-              button: `${icons.play}<span>Play</span>`,
-              className: "btn-play",
-              extra: "",
-              onClick: () => window.open(stashUrl, '_blank').focus()
-          })
-          return
-        } else {
-          console.log("Scene not found in Stash, showing monitored status")
-        }
-      } catch (error) {
-        console.error("Error checking Stash:", error)
-        console.log("Stash check failed, showing monitored status")
+      const localStashSceneId = await getLocalStashSceneId(whisparrScene)
+      console.log("Stash scene ID found:", localStashSceneId)
+      if (localStashSceneId) {
+        const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
+        console.log("Showing Play button for Stash URL:", stashUrl)
+        updateStatus({
+            button: `${icons.play}<span>Play</span>`,
+            className: "btn-play",
+            extra: "",
+            onClick: () => window.open(stashUrl, '_blank').focus()
+        })
+        return
+      } else {
+        console.log("Scene not found in Stash, showing monitored status")
       }
     } else if (whisparrScene.monitored) {
       updateStatusToMonitored()
@@ -850,55 +845,40 @@ async function getLocalStashSceneIdByStashId(stashId) {
 
 async function getLocalStashSceneId(whisparrScene) {
   console.log("Querying Stash GraphQL for stashId:", whisparrScene.stashId)
-  console.log("Stash GraphQL endpoint:", localStashGraphQlEndpoint)
-  
-  try {
-    const stashRes = await localStashGraphQl({
-        "variables": {
-          "scene_filter": {
-            "stash_id_endpoint": {
-              "endpoint": "",
-              "modifier": "EQUALS",
-              "stash_id": whisparrScene.stashId
+  const stashRes = await localStashGraphQl({
+      "variables": {
+        "scene_filter": {
+          "stash_id_endpoint": {
+            "endpoint": "",
+            "modifier": "EQUALS",
+            "stash_id": whisparrScene.stashId
+          }
+        }
+      },
+      query: `
+        query ($scene_filter: SceneFilterType) {
+          findScenes(scene_filter: $scene_filter) {
+            scenes {
+              id
             }
           }
-        },
-        query: `
-          query ($scene_filter: SceneFilterType) {
-            findScenes(scene_filter: $scene_filter) {
-              scenes {
-                id
-              }
-            }
-          }
-        `
-    });
-    console.log("Stash GraphQL response:", stashRes)
-    const sceneId = stashRes.data.findScenes.scenes[0]?.id
-    console.log("Extracted scene ID:", sceneId)
-    return sceneId
-  } catch (error) {
-    console.error("Stash GraphQL query failed:", error)
-    throw error
-  }
+        }
+      `
+  });
+  console.log("Stash GraphQL response:", stashRes)
+  const sceneId = stashRes.data.findScenes.scenes[0]?.id
+  console.log("Extracted scene ID:", sceneId)
+  return sceneId
 }
 
 const fetchWhisparr = factoryFetchApi(`${whisparrBaseUrl}/api/v3/`, {"X-Api-Key": whisparrApiKey})
 
 async function localStashGraphQl(request) {
   console.log("Making Stash GraphQL request to:", localStashGraphQlEndpoint)
-  console.log("Request body:", request)
-  console.log("Auth headers:", localStashAuthHeaders)
-  
-  try {
-    const fetchLocalStash = factoryFetchApi(localStashGraphQlEndpoint, localStashAuthHeaders)
-    const result = await fetchLocalStash("", {body: request})
-    console.log("Stash GraphQL request successful:", result)
-    return result
-  } catch (error) {
-    console.error("Stash GraphQL request failed:", error)
-    throw error
-  }
+  const fetchLocalStash = factoryFetchApi(localStashGraphQlEndpoint, localStashAuthHeaders)
+  const result = await fetchLocalStash("", {body: request})
+  console.log("Stash GraphQL request successful:", result)
+  return result
 }
 
 function factoryFetchApi(baseUrl, defaultHeaders) {
