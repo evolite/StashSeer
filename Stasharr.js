@@ -837,7 +837,27 @@ async function getLocalStashSceneIdByStashId(stashId) {
 }
 
 async function getLocalStashSceneId(whisparrScene) {
-  return await getLocalStashSceneIdByStashId(whisparrScene.stashId)
+  const stashRes = await localStashGraphQl({
+      "variables": {
+        "scene_filter": {
+          "stash_id_endpoint": {
+            "endpoint": "",
+            "modifier": "EQUALS",
+            "stash_id": whisparrScene.stashId
+          }
+        }
+      },
+      query: `
+        query ($scene_filter: SceneFilterType) {
+          findScenes(scene_filter: $scene_filter) {
+            scenes {
+              id
+            }
+          }
+        }
+      `
+  });
+  return stashRes.data.findScenes.scenes[0]?.id
 }
 
 const fetchWhisparr = factoryFetchApi(`${whisparrBaseUrl}/api/v3/`, {"X-Api-Key": whisparrApiKey})
