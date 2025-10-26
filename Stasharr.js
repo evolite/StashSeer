@@ -553,7 +553,7 @@ async function checkIfAvaliable(stashId, updateStatus) {
         })
         break;
       case "not available for download":
-        updateStatusToMonitored()
+        updateStatusToUnmonitored()
         break;
       default:
         updateStatus({
@@ -581,11 +581,11 @@ async function ensureSceneAdded(stashId) {
       {
         body: {
           addOptions: {
-              monitor: "movieOnly",
+              monitor: "none",
               searchForMovie: false,
           },
           foreignId: stashId,
-          monitored: true,
+          monitored:	false,
           qualityProfileId: 1,
           rootFolderPath: whisparrRootFolderPath,
           stashId: stashId,
