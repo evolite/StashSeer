@@ -600,12 +600,19 @@ async function ensureSceneAdded(stashId) {
   }
 }
 
-async function triggerMoviesSearch() {
+async function triggerMoviesSearch(movieIds = null) {
   try {
+    const commandBody = {
+      name: "MoviesSearch"
+    };
+    
+    // If specific movie IDs are provided, search only those movies
+    if (movieIds && movieIds.length > 0) {
+      commandBody.movieIds = movieIds;
+    }
+    
     const response = await fetchWhisparr("/command", {
-      body: {
-        name: "MoviesSearch"
-      }
+      body: commandBody
     });
     console.log("MoviesSearch command triggered:", response);
     return response;
@@ -640,8 +647,8 @@ async function monitorScene(monitor, whisparrScene) {
     // Wait 5 seconds to let Whisparr process the monitoring change
     setTimeout(async () => {
       try {
-        await triggerMoviesSearch();
-        console.log("MoviesSearch triggered after enabling monitoring (5s delay)");
+        await triggerMoviesSearch([whisparrScene.id]);
+        console.log(`MoviesSearch triggered for movie ${whisparrScene.id} after enabling monitoring (5s delay)`);
       } catch (error) {
         console.error("Failed to trigger MoviesSearch:", error);
         // Don't throw error here - monitoring was successful, search failure is not critical
