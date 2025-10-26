@@ -625,12 +625,12 @@ async function ensureSceneAddedAsMonitored(stashId) {
   }
 
   try {
-    const newScene = await fetchWhisparr(
+    return await fetchWhisparr(
       "/movie",
       {
         body: {
           addOptions: {
-              monitor: "movieOnly",
+              monitor: "none",
               searchForMovie: false,
           },
           foreignId: stashId,
@@ -643,18 +643,6 @@ async function ensureSceneAddedAsMonitored(stashId) {
         }
       }
     );
-    
-    // Trigger MoviesSearch after 5 seconds for the newly added monitored scene
-    setTimeout(async () => {
-      try {
-        await triggerMoviesSearch([newScene.id]);
-        console.log(`MoviesSearch triggered for newly added monitored movie ${newScene.id} (5s delay)`);
-      } catch (error) {
-        console.error("Failed to trigger MoviesSearch for new scene:", error);
-      }
-    }, 5000);
-    
-    return newScene;
   } catch(error) {
     console.error(error.statusCode, error.resBody)
     throw error
