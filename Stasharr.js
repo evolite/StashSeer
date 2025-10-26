@@ -46,8 +46,6 @@ const whisparrRootFolderPath = config.whisparrRootFolderPath
 const localStashRootUrl = config.localStashRootUrl
 const localStashGraphQlEndpoint = localStashRootUrl + '/graphql'
 const localStashAuthHeaders = {'ApiKey': config.stashApiKey}
-console.log("Stash API Key configured:", config.stashApiKey ? "Yes" : "No")
-console.log("Stash Auth Headers:", localStashAuthHeaders)
 
 ;(async function() {
     'use strict';
@@ -398,14 +396,10 @@ async function addButtonToScenePage(downloadElm) {
 let observer = new MutationObserver(async function(mutations) {
     for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
-            console.log("added node")
             if (node.nodeType === 1 && (node.classList.contains("scene-info"))) {
-              console.log("🎬 Stasharr script activated - scene page detected")
-              console.log("added scene node")
               const {downloadElm, updateStatus} = createButton()
               await addButtonToScenePage(downloadElm)
               const stashId = location.pathname.split("/")[2]
-              console.log("Extracted stashId from URL:", stashId)
               await checkIfAvaliable(stashId, updateStatus)
             }
         }
@@ -419,8 +413,6 @@ observer.observe(document, config);
 async function checkIfAvaliable(stashId, updateStatus) {
     let whisparrScene
     
-    console.log("=== Starting checkIfAvaliable for stashId:", stashId, "===")
-    
     // First check if scene already exists in Stash
     updateStatus({
       button: `${icons.loading}<span>Checking Stash...</span>`,
@@ -428,12 +420,9 @@ async function checkIfAvaliable(stashId, updateStatus) {
       extra: ``
     })
 
-    console.log("Checking Stash first for stashId:", stashId)
     const localStashSceneId = await getLocalStashSceneIdByStashId(stashId)
-    console.log("Stash scene ID found:", localStashSceneId)
     if (localStashSceneId) {
       const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
-      console.log("Scene found in Stash, showing Play button:", stashUrl)
       updateStatus({
           button: `${icons.play}<span>Play</span>`,
           className: "btn-play",
@@ -451,11 +440,8 @@ async function checkIfAvaliable(stashId, updateStatus) {
     })
 
     try {
-      console.log("Connecting to Whisparr...")
       whisparrScene = await ensureSceneAdded(stashId)
-      console.log("✅ Whisparr connection successful, scene:", whisparrScene)
     } catch(error) {
-      console.error("❌ Whisparr connection failed:", error)
       updateStatus({
         button: `${icons.error}<span>Error</span>`,
         className: "btn-error",
@@ -477,7 +463,7 @@ async function checkIfAvaliable(stashId, updateStatus) {
                 updateStatusToMonitored()
                 return
               } catch (error) {
-                console.error("Error adding scene as monitored:", error)
+                // Error adding scene as monitored
                 return
               }
             }
@@ -502,7 +488,7 @@ async function checkIfAvaliable(stashId, updateStatus) {
                 updateStatusToMonitored()
                 return
               } catch (error) {
-                console.error("Error adding scene as monitored:", error)
+                // Error adding scene as monitored
                 return
               }
             }
@@ -625,7 +611,7 @@ async function ensureSceneAdded(stashId) {
       }
     );
   } catch(error) {
-    console.error(error.statusCode, error.resBody)
+    // Error details
     throw error
   }
 }
@@ -665,15 +651,14 @@ async function ensureSceneAddedAsMonitored(stashId) {
     setTimeout(async () => {
       try {
         await triggerMoviesSearch([newScene.id]);
-        console.log(`MoviesSearch triggered for newly added monitored movie ${newScene.id} (5s delay)`);
       } catch (error) {
-        console.error("Failed to trigger MoviesSearch for new scene:", error);
+        // Failed to trigger MoviesSearch for new scene
       }
     }, 5000);
     
     return newScene;
   } catch(error) {
-    console.error(error.statusCode, error.resBody)
+    // Error details
     throw error
   }
 }
@@ -692,10 +677,8 @@ async function triggerMoviesSearch(movieIds = null) {
     const response = await fetchWhisparr("/command", {
       body: commandBody
     });
-    console.log("MoviesSearch command triggered:", response);
     return response;
   } catch (error) {
-    console.error("Error triggering MoviesSearch:", error);
     throw error;
   }
 }
@@ -726,9 +709,9 @@ async function monitorScene(monitor, whisparrScene) {
     setTimeout(async () => {
       try {
         await triggerMoviesSearch([whisparrScene.id]);
-        console.log(`MoviesSearch triggered for movie ${whisparrScene.id} after enabling monitoring (5s delay)`);
+        // MoviesSearch triggered for movie after enabling monitoring
       } catch (error) {
-        console.error("Failed to trigger MoviesSearch:", error);
+        // Failed to trigger MoviesSearch
         // Don't throw error here - monitoring was successful, search failure is not critical
       }
     }, 5000);
@@ -790,7 +773,6 @@ async function getLocalStashSceneIdByStashId(stashId) {
   
   // First try: Search by URL (most reliable)
   try {
-    console.log("Trying URL search for:", stashId)
     const stashRes = await localStashGraphQl({
         "variables": {
           "scene_filter": {
@@ -812,68 +794,23 @@ async function getLocalStashSceneIdByStashId(stashId) {
         `
       }
     );
-    console.log("Stash GraphQL response (URL):", stashRes)
     const scene = stashRes.data.findScenes.scenes[0];
     if (scene) {
-      console.log("Found scene via URL:", scene.id)
       return scene.id;
     }
   } catch (error) {
-    console.log("Stash search by URL failed:", error);
-    console.log("Error details:", error.resBody);
-    if (error.resBody && error.resBody.errors) {
-      console.log("GraphQL errors:", error.resBody.errors);
-    }
+    // Stash search by URL failed
   }
   
-  // Second try: Search by stash_ids field directly
+  // Second try: Search by stash_id field directly
   try {
-    console.log("Trying stash_ids field search for:", stashId)
     const stashRes = await localStashGraphQl({
         "variables": {
           "scene_filter": {
-            "stash_ids": {
-              "modifier": "EQUALS",
-              "value": stashId
-            }
-          }
-        },
-        query: `
-          query ($scene_filter: SceneFilterType) {
-            findScenes(scene_filter: $scene_filter) {
-              scenes {
-                id
-                stash_ids
-              }
-            }
-          }
-        `
-      }
-    );
-    console.log("Stash GraphQL response (stash_ids):", stashRes)
-    const scene = stashRes.data.findScenes.scenes[0];
-    if (scene) {
-      console.log("Found scene via stash_ids field:", scene.id)
-      return scene.id;
-    }
-  } catch (error) {
-    console.log("Stash search by stash_ids field failed:", error);
-    console.log("Error details:", error.resBody);
-    if (error.resBody && error.resBody.errors) {
-      console.log("GraphQL errors:", error.resBody.errors);
-    }
-  }
-  
-  // Third try: Search by stash_ids_endpoint
-  try {
-    console.log("Trying stash_ids_endpoint search for:", stashId)
-    const stashRes = await localStashGraphQl({
-        "variables": {
-          "scene_filter": {
-            "stash_ids_endpoint": {
+            "stash_id_endpoint": {
               "endpoint": "",
               "modifier": "EQUALS",
-              "stash_ids": stashId
+              "stash_id": stashId
             }
           }
         },
@@ -882,40 +819,62 @@ async function getLocalStashSceneIdByStashId(stashId) {
             findScenes(scene_filter: $scene_filter) {
               scenes {
                 id
-                stash_ids
               }
             }
           }
         `
       }
     );
-    console.log("Stash GraphQL response (stash_ids_endpoint):", stashRes)
     const scene = stashRes.data.findScenes.scenes[0];
     if (scene) {
-      console.log("Found scene via stash_ids_endpoint:", scene.id)
       return scene.id;
     }
   } catch (error) {
-    console.log("Stash search by stash_ids_endpoint failed:", error);
-    console.log("Error details:", error.resBody);
-    if (error.resBody && error.resBody.errors) {
-      console.log("GraphQL errors:", error.resBody.errors);
-    }
+    // Stash search by stash_id field failed
   }
   
-  console.log("No scene found in Stash with any method")
+  // Third try: Search by stash_id_endpoint (backup method)
+  try {
+    const stashRes = await localStashGraphQl({
+        "variables": {
+          "scene_filter": {
+            "stash_id_endpoint": {
+              "endpoint": "",
+              "modifier": "EQUALS",
+              "stash_id": stashId
+            }
+          }
+        },
+        query: `
+          query ($scene_filter: SceneFilterType) {
+            findScenes(scene_filter: $scene_filter) {
+              scenes {
+                id
+              }
+            }
+          }
+        `
+      }
+    );
+    const scene = stashRes.data.findScenes.scenes[0];
+    if (scene) {
+      return scene.id;
+    }
+  } catch (error) {
+    // Stash search by stash_id_endpoint failed
+  }
+  
   return null;
 }
 
 async function getLocalStashSceneId(whisparrScene) {
-  console.log("Querying Stash GraphQL for stashId:", whisparrScene.stashId)
   const stashRes = await localStashGraphQl({
       "variables": {
         "scene_filter": {
-          "stash_ids_endpoint": {
+          "stash_id_endpoint": {
             "endpoint": "",
             "modifier": "EQUALS",
-            "stash_ids": whisparrScene.stashId
+            "stash_id": whisparrScene.stashId
           }
         }
       },
@@ -929,20 +888,14 @@ async function getLocalStashSceneId(whisparrScene) {
         }
       `
   });
-  console.log("Stash GraphQL response:", stashRes)
-  const sceneId = stashRes.data.findScenes.scenes[0]?.id
-  console.log("Extracted scene ID:", sceneId)
-  return sceneId
+  return stashRes.data.findScenes.scenes[0]?.id
 }
 
 const fetchWhisparr = factoryFetchApi(`${whisparrBaseUrl}/api/v3/`, {"X-Api-Key": whisparrApiKey})
 
 async function localStashGraphQl(request) {
-  console.log("Making Stash GraphQL request to:", localStashGraphQlEndpoint)
   const fetchLocalStash = factoryFetchApi(localStashGraphQlEndpoint, localStashAuthHeaders)
-  const result = await fetchLocalStash("", {body: request})
-  console.log("Stash GraphQL request successful:", result)
-  return result
+  return fetchLocalStash("", {body: request})
 }
 
 function factoryFetchApi(baseUrl, defaultHeaders) {
