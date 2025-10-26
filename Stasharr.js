@@ -271,8 +271,34 @@ observer.observe(document, config);
 
 async function checkIfAvaliable(stashId, updateStatus) {
     let whisparrScene
+    
+    // First check if scene already exists in Stash
     updateStatus({
-      button: `${icons.loading}<span>Checking...</span>`,
+      button: `${icons.loading}<span>Checking Stash...</span>`,
+      className: "btn-loading",
+      extra: ``
+    })
+
+    try {
+      const localStashSceneId = await getLocalStashSceneIdByStashId(stashId)
+      if (localStashSceneId) {
+        const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`
+        updateStatus({
+            button: `${icons.play}<span>Play</span>`,
+            className: "btn-play",
+            extra: "",
+            onClick: () => window.open(stashUrl, '_blank').focus()
+        })
+        return
+      }
+    } catch(error) {
+      console.log("Error checking Stash:", error)
+      // Continue to Whisparr check if Stash check fails
+    }
+
+    // If not in Stash, check Whisparr
+    updateStatus({
+      button: `${icons.loading}<span>Checking Whisparr...</span>`,
       className: "btn-loading",
       extra: ``
     })
@@ -500,14 +526,14 @@ async function downloadVideo(whisparrScene) {
   await removeAutoTags(whisparrScene)
 }
 
-async function getLocalStashSceneId(whisparrScene) {
+async function getLocalStashSceneIdByStashId(stashId) {
   const stashRes = await localStashGraphQl({
       "variables": {
         "scene_filter": {
           "stash_id_endpoint": {
             "endpoint": "",
             "modifier": "EQUALS",
-            "stash_id": whisparrScene.stashId
+            "stash_id": stashId
           }
         }
       },
@@ -522,6 +548,10 @@ async function getLocalStashSceneId(whisparrScene) {
       `
   });
   return stashRes.data.findScenes.scenes[0]?.id
+}
+
+async function getLocalStashSceneId(whisparrScene) {
+  return await getLocalStashSceneIdByStashId(whisparrScene.stashId)
 }
 
 const fetchWhisparr = factoryFetchApi(`${whisparrBaseUrl}/api/v3/`, {"X-Api-Key": whisparrApiKey})
