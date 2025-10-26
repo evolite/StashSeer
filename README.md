@@ -1,17 +1,14 @@
 # Stasharr Config
 
-My personal scripts for managing adult content with StashDB + Whisparr + Stash.
+My personal scripts for managing content with StashDB + Whisparr + Stash.
 
 ## What This Does
 
 - **Stasharr.js** - Tampermonkey script that adds download buttons to StashDB pages
-- **WhisparrMissingSearch.ps1** - PowerShell script to search for missing movies in Whisparr
 
 ## Quick Setup
 
-1. **For browser script:** Copy `Stasharr.js` into Tampermonkey and click the Settings button to configure
-
-2. **For PowerShell script:** Edit the script to add your API key
+1. **For browser script:** Copy `Stasharr.js` into Tampermonkey, load stashdb.org and click on a scene then click the Settings button to configure
 
 ## How It Works
 
@@ -21,13 +18,7 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
 - Connects to local Whisparr (port 6969) and Stash (port 9999)
 - Shows real-time status: Download → Monitored → Playing
 - Settings button for easy API key configuration
-
-### WhisparrMissingSearch.ps1 (Missing Movies Search)
-- Searches for missing movies in Whisparr
-- Uses Whisparr's MoviesSearch command
-- Simple hardcoded configuration
-- Shows command status and results
-- Error handling for API issues
+- Automatically triggers MoviesSearch when enabling monitoring
 
 ## My Config
 
@@ -42,14 +33,4 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
 1. Install `Stasharr.js` in Tampermonkey
 2. Click Settings button to configure API keys
 3. Browse StashDB and use download buttons
-
-**Missing Movies Search:**
-```powershell
-.\WhisparrMissingSearch.ps1
-```
-
-## Notes
-
-- Browser script uses Tampermonkey storage for settings persistence
-- PowerShell script uses hardcoded configuration (edit script to add API key)
-- Script checks Stash first, then Whisparr if not found
+4. When you enable monitoring, it automatically searches for missing movies

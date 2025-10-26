@@ -600,8 +600,23 @@ async function ensureSceneAdded(stashId) {
   }
 }
 
+async function triggerMoviesSearch() {
+  try {
+    const response = await fetchWhisparr("/command", {
+      body: {
+        name: "MoviesSearch"
+      }
+    });
+    console.log("MoviesSearch command triggered:", response);
+    return response;
+  } catch (error) {
+    console.error("Error triggering MoviesSearch:", error);
+    throw error;
+  }
+}
+
 async function monitorScene(monitor, whisparrScene) {
-  return await fetchWhisparr(
+  const result = await fetchWhisparr(
     `/movie/${whisparrScene.id}`,
     {
       method: "PUT",
@@ -619,6 +634,19 @@ async function monitorScene(monitor, whisparrScene) {
       }
     }
   );
+
+  // If we're enabling monitoring, trigger a MoviesSearch to find missing movies
+  if (monitor) {
+    try {
+      await triggerMoviesSearch();
+      console.log("MoviesSearch triggered after enabling monitoring");
+    } catch (error) {
+      console.error("Failed to trigger MoviesSearch:", error);
+      // Don't throw error here - monitoring was successful, search failure is not critical
+    }
+  }
+
+  return result;
 }
 
 async function removeAutoTags(whisparrScene) {
