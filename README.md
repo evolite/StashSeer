@@ -9,20 +9,9 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
 
 ## Quick Setup
 
-1. **Copy config:**
-   ```bash
-   cp env.example .env
-   ```
+1. **For browser script:** Copy `Stasharr.js` into Tampermonkey and click the Settings button to configure
 
-2. **Edit `.env` with your actual API keys:**
-   ```
-   WHISPARR_BASE_URL=http://localhost:6969
-   WHISPARR_API_KEY=your-whisparr-key
-   STASH_ROOT_URL=http://localhost:9999
-   STASH_API_KEY=your-stash-key
-   ```
-
-3. **For browser script:** Copy `Stasharr.js` into Tampermonkey and click the Settings button to configure
+2. **For PowerShell script:** Set environment variables or edit the script directly
 
 ## How It Works
 
@@ -36,7 +25,7 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
 ### WhisparrMissingSearch.ps1 (Missing Movies Search)
 - Searches for missing movies in Whisparr
 - Uses Whisparr's MoviesSearch command
-- Loads configuration from .env file
+- Loads configuration from environment variables or .env file
 - Shows command status and results
 - Error handling for API issues
 
@@ -61,7 +50,6 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
 
 ## Notes
 
-- `.env` file is gitignored so API keys don't get committed
 - Browser script uses Tampermonkey storage for settings persistence
-- PowerShell script auto-loads .env file if present
+- PowerShell script can use environment variables or .env file if present
 - Script checks Stash first, then Whisparr if not found
