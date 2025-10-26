@@ -5,7 +5,6 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
 ## What This Does
 
 - **Stasharr.js** - Tampermonkey script that adds download buttons to StashDB pages
-- **StashIdentifier.ps1** - PowerShell script to update Stash metadata from StashDB
 
 ## Quick Setup
 
@@ -22,7 +21,7 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
    STASH_API_KEY=your-stash-key
    ```
 
-3. **For browser script:** Copy `Stasharr.js` into Tampermonkey and update the hardcoded values at the top
+3. **For browser script:** Copy `Stasharr.js` into Tampermonkey and click the Settings button to configure
 
 ## How It Works
 
@@ -31,22 +30,18 @@ My personal scripts for managing adult content with StashDB + Whisparr + Stash.
 - Adds download/monitor/play buttons to scene pages
 - Connects to local Whisparr (port 6969) and Stash (port 9999)
 - Shows real-time status: Download → Monitored → Playing
-
-### StashIdentifier.ps1 (Metadata Script)
-- Fetches metadata from StashDB GraphQL
-- Updates titles, tags, performers, studios in Stash
-- Run this periodically to keep metadata fresh
+- Settings button for easy API key configuration
 
 ## My Config
 
-- **Whisparr:** `http://localhost:6969` (API key in .env)
-- **Stash:** `http://localhost:9999` (API key in .env)
+- **Whisparr:** `http://localhost:6969` (API key in settings)
+- **Stash:** `http://localhost:9999` (API key in settings)
 - **Download path:** `/data/`
 - **Tags:** ID 1 for new scenes
 
 ## Notes
 
 - `.env` file is gitignored so API keys don't get committed
-- Browser script needs manual config since browsers can't read .env files
-- PowerShell script auto-loads .env if present
-- Both scripts have fallback values if env vars aren't set
+- Browser script uses Tampermonkey storage for settings persistence
+- Settings button lets you configure API keys without editing code
+- Script checks Stash first, then Whisparr if not found
