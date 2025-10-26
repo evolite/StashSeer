@@ -11,16 +11,19 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
-// Whisparr Config
-const whisparrBaseUrl = 'http://localhost:6969' // Root url of Whisparr v3 instance to use
-const whisparrApiKey = "1d6a9a4a54664a6c87cc71a42727c6b9" // API key of above Whisparr instance
-const whisparrNewSiteTags = [1] // Array of IDs of tags in Whisparr that added scenes should be tagged with
-const whisparrRootFolderPath = "/data/" // Root folder path for downloaded scenes in Whisparr
+// Configuration - Update these values or set them via environment variables
+// For browser userscript, you'll need to manually update these values
+// For Node.js usage, you can use process.env variables
+
+const whisparrBaseUrl = process.env.WHISPARR_BASE_URL || 'http://localhost:6969' // Root url of Whisparr v3 instance to use
+const whisparrApiKey = process.env.WHISPARR_API_KEY || "1d6a9a4a54664a6c87cc71a42727c6b9" // API key of above Whisparr instance
+const whisparrNewSiteTags = process.env.WHISPARR_NEW_SITE_TAGS ? process.env.WHISPARR_NEW_SITE_TAGS.split(',').map(Number) : [1] // Array of IDs of tags in Whisparr that added scenes should be tagged with
+const whisparrRootFolderPath = process.env.WHISPARR_ROOT_FOLDER_PATH || "/data/" // Root folder path for downloaded scenes in Whisparr
 
 // Stash Config
-const localStashRootUrl = 'http://localhost:9999'
+const localStashRootUrl = process.env.STASH_ROOT_URL || 'http://localhost:9999'
 const localStashGraphQlEndpoint = localStashRootUrl + '/graphql' // Stash graphql endpoint used for fetching url of downloaded scene
-const localStashAuthHeaders = {'ApiKey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJldm90ZWNoIiwic3ViIjoiQVBJS2V5IiwiaWF0IjoxNzI1OTc1MzAzfQ.S-SaRNjjHxqHTNBF_deQF9FMyNemWDc-ssTQMLlDu4M'} // Any headers that should be supplied when sending requests to stash
+const localStashAuthHeaders = {'ApiKey': process.env.STASH_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJldm90ZWNoIiwic3ViIjoiQVBJS2V5IiwiaWF0IjoxNzI1OTc1MzAzfQ.S-SaRNjjHxqHTNBF_deQF9FMyNemWDc-ssTQMLlDu4M'} // Any headers that should be supplied when sending requests to stash
 
 ;(async function() {
     'use strict';

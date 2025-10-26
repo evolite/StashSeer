@@ -27,7 +27,22 @@ A Tampermonkey userscript that adds download functionality to StashDB.org pages.
 - Modern UI with loading states and error handling
 
 #### Configuration:
-Update these variables in the script:
+The script supports environment variables for configuration. Create a `.env` file in the same directory:
+
+```bash
+# Copy the example file
+cp env.example .env
+
+# Edit with your actual values
+WHISPARR_BASE_URL=http://localhost:6969
+WHISPARR_API_KEY=your-actual-api-key
+WHISPARR_NEW_SITE_TAGS=1
+WHISPARR_ROOT_FOLDER_PATH=/data/
+STASH_ROOT_URL=http://localhost:9999
+STASH_API_KEY=your-actual-stash-api-key
+```
+
+For browser userscript usage, you'll need to manually update these values in the script:
 ```javascript
 const whisparrBaseUrl = 'http://localhost:6969' // Your Whisparr URL
 const whisparrApiKey = "your-api-key" // Whisparr API key
@@ -51,9 +66,20 @@ PowerShell script for automated metadata management in Stash:
 - Configurable field strategies (OVERWRITE/MERGE)
 
 #### Usage:
-```powershell
-.\StashIdentifier.ps1
-```
+1. **Set up environment variables:**
+   ```bash
+   # Copy the example file
+   cp env.example .env
+   
+   # Edit with your actual API keys and URLs
+   ```
+
+2. **Run the script:**
+   ```powershell
+   .\StashIdentifier.ps1
+   ```
+
+The script will automatically load configuration from the `.env` file if present, or use default values.
 
 ## Setup Instructions
 
@@ -73,7 +99,8 @@ PowerShell script for automated metadata management in Stash:
 2. **Configure API keys:**
    - Get Whisparr API key from Settings → General
    - Get Stash API key from Settings → Security
-   - Update both scripts with your credentials
+   - Copy `env.example` to `.env` and update with your credentials
+   - For browser userscript, manually update the values in `Stasharr.js`
 
 3. **Set up paths:**
    - Configure Whisparr root folder path
@@ -89,10 +116,12 @@ PowerShell script for automated metadata management in Stash:
 
 ## Configuration Notes
 
+- **Environment Variables**: Use the `.env` file for secure API key storage
 - **API Keys**: Keep your API keys secure and don't share them
 - **Network Access**: Ensure Whisparr and Stash are accessible from your browser
 - **File Paths**: Configure paths according to your system setup
 - **Tags**: Customize tag IDs based on your Whisparr configuration
+- **Git Security**: The `.env` file is automatically ignored by Git to prevent accidental commits
 
 ## Contributing
 

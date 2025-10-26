@@ -1,4 +1,20 @@
-﻿# MetadataIdentify Request Body
+﻿# Load environment variables from .env file if it exists
+if (Test-Path ".env") {
+    Get-Content ".env" | ForEach-Object {
+        if ($_ -match "^([^#][^=]+)=(.*)$") {
+            $name = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            [Environment]::SetEnvironmentVariable($name, $value, "Process")
+        }
+    }
+}
+
+# Get configuration from environment variables with fallbacks
+$stashRootUrl = if ($env:STASH_ROOT_URL) { $env:STASH_ROOT_URL } else { "http://localhost:9999" }
+$stashApiKey = if ($env:STASH_API_KEY) { $env:STASH_API_KEY } else { "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJldm90ZWNoIiwic3ViIjoiQVBJS2V5IiwiaWF0IjoxNzI1OTc1MzAzfQ.S-SaRNjjHxqHTNBF_deQF9FMyNemWDc-ssTQMLlDu4M" }
+$stashdbEndpoint = if ($env:STASHDB_ENDPOINT) { $env:STASHDB_ENDPOINT } else { "https://stashdb.org/graphql" }
+
+# MetadataIdentify Request Body
 $bodyIdentify = @{
   operationName = 'MetadataIdentify'
   variables = @{
@@ -6,7 +22,7 @@ $bodyIdentify = @{
       sources = @(
         @{
           source = @{
-            stash_box_endpoint = 'https://stashdb.org/graphql'
+            stash_box_endpoint = $stashdbEndpoint
           }
         }
       )
@@ -36,9 +52,9 @@ $bodyIdentify = @{
 $jsonBodyIdentify = $bodyIdentify | ConvertTo-Json -Depth 5
 
 # MetadataIdentify Request
-Invoke-RestMethod -Uri 'http://localhost:9999/graphql' -Method Post `
+Invoke-RestMethod -Uri "$stashRootUrl/graphql" -Method Post `
   -Body $jsonBodyIdentify -ContentType 'application/json' `
-  -Headers @{ 'ApiKey' = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJldm90ZWNoIiwic3ViIjoiQVBJS2V5IiwiaWF0IjoxNzI1OTc1MzAzfQ.S-SaRNjjHxqHTNBF_deQF9FMyNemWDc-ssTQMLlDu4M' } `
+  -Headers @{ 'ApiKey' = $stashApiKey } `
   -ErrorAction SilentlyContinue
 
 # MetadataClean Request Body
@@ -55,7 +71,7 @@ $bodyClean = @{
 $jsonBodyClean = $bodyClean | ConvertTo-Json
 
 # MetadataClean Request
-Invoke-RestMethod -Uri 'http://localhost:9999/graphql' -Method Post `
+Invoke-RestMethod -Uri "$stashRootUrl/graphql" -Method Post `
   -Body $jsonBodyClean -ContentType 'application/json' `
-  -Headers @{ 'ApiKey' = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJldm90ZWNoIiwic3ViIjoiQVBJS2V5IiwiaWF0IjoxNzI1OTc1MzAzfQ.S-SaRNjjHxqHTNBF_deQF9FMyNemWDc-ssTQMLlDu4M' } `
+  -Headers @{ 'ApiKey' = $stashApiKey } `
   -ErrorAction SilentlyContinue
