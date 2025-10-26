@@ -788,8 +788,85 @@ async function downloadVideo(whisparrScene) {
 async function getLocalStashSceneIdByStashId(stashId) {
   // Try multiple approaches to find the scene in Stash
   
-  // First try: Search by stash_id_endpoint
+  // First try: Search by URL (most reliable)
   try {
+    console.log("Trying URL search for:", stashId)
+    const stashRes = await localStashGraphQl({
+        "variables": {
+          "scene_filter": {
+            "url": {
+              "modifier": "EQUALS",
+              "value": `https://stashdb.org/scenes/${stashId}`
+            }
+          }
+        },
+        query: `
+          query ($scene_filter: SceneFilterType) {
+            findScenes(scene_filter: $scene_filter) {
+              scenes {
+                id
+                url
+              }
+            }
+          }
+        `
+      }
+    );
+    console.log("Stash GraphQL response (URL):", stashRes)
+    const scene = stashRes.data.findScenes.scenes[0];
+    if (scene) {
+      console.log("Found scene via URL:", scene.id)
+      return scene.id;
+    }
+  } catch (error) {
+    console.log("Stash search by URL failed:", error);
+    console.log("Error details:", error.resBody);
+    if (error.resBody && error.resBody.errors) {
+      console.log("GraphQL errors:", error.resBody.errors);
+    }
+  }
+  
+  // Second try: Search by stash_id field directly
+  try {
+    console.log("Trying stash_id field search for:", stashId)
+    const stashRes = await localStashGraphQl({
+        "variables": {
+          "scene_filter": {
+            "stash_id": {
+              "modifier": "EQUALS",
+              "value": stashId
+            }
+          }
+        },
+        query: `
+          query ($scene_filter: SceneFilterType) {
+            findScenes(scene_filter: $scene_filter) {
+              scenes {
+                id
+                stash_id
+              }
+            }
+          }
+        `
+      }
+    );
+    console.log("Stash GraphQL response (stash_id):", stashRes)
+    const scene = stashRes.data.findScenes.scenes[0];
+    if (scene) {
+      console.log("Found scene via stash_id field:", scene.id)
+      return scene.id;
+    }
+  } catch (error) {
+    console.log("Stash search by stash_id field failed:", error);
+    console.log("Error details:", error.resBody);
+    if (error.resBody && error.resBody.errors) {
+      console.log("GraphQL errors:", error.resBody.errors);
+    }
+  }
+  
+  // Third try: Search by stash_id_endpoint
+  try {
+    console.log("Trying stash_id_endpoint search for:", stashId)
     const stashRes = await localStashGraphQl({
         "variables": {
           "scene_filter": {
@@ -812,55 +889,21 @@ async function getLocalStashSceneIdByStashId(stashId) {
         `
       }
     );
+    console.log("Stash GraphQL response (stash_id_endpoint):", stashRes)
     const scene = stashRes.data.findScenes.scenes[0];
     if (scene) {
+      console.log("Found scene via stash_id_endpoint:", scene.id)
       return scene.id;
     }
   } catch (error) {
     console.log("Stash search by stash_id_endpoint failed:", error);
     console.log("Error details:", error.resBody);
-    console.log("Full error object:", error);
     if (error.resBody && error.resBody.errors) {
       console.log("GraphQL errors:", error.resBody.errors);
     }
   }
   
-  // Second try: Search by stash_id field directly
-  try {
-    const stashRes = await localStashGraphQl({
-        "variables": {
-          "scene_filter": {
-            "stash_id": {
-              "modifier": "EQUALS",
-              "value": stashId
-            }
-          }
-        },
-        query: `
-          query ($scene_filter: SceneFilterType) {
-            findScenes(scene_filter: $scene_filter) {
-              scenes {
-                id
-                stash_id
-              }
-            }
-          }
-        `
-      }
-    );
-    const scene = stashRes.data.findScenes.scenes[0];
-    if (scene) {
-      return scene.id;
-    }
-  } catch (error) {
-    console.log("Stash search by stash_id field failed:", error);
-    console.log("Error details:", error.resBody);
-    console.log("Full error object:", error);
-    if (error.resBody && error.resBody.errors) {
-      console.log("GraphQL errors:", error.resBody.errors);
-    }
-  }
-  
+  console.log("No scene found in Stash with any method")
   return null;
 }
 
