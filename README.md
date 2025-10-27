@@ -1,4 +1,4 @@
-# Stasharr
+# StashSeer
 
 Tampermonkey script for StashDB integration with Whisparr and Stash.
 
