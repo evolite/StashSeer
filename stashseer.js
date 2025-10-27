@@ -1017,14 +1017,14 @@ img {
         headers['CF-Access-Client-Secret'] = cfAccessClientSecret;
       }
       
-      // Debug: log headers if CF is configured
-      if (cfAccessClientId || cfAccessClientSecret) {
-        console.log('StashSeer CF Headers:', {
-          'CF-Access-Client-Id': headers['CF-Access-Client-Id'] || '(not set)',
-          'CF-Access-Client-Secret': headers['CF-Access-Client-Secret'] ? '***' : '(not set)',
-          'Target URL': baseUrl + subPath,
-        });
-      }
+      // Debug: log all headers being sent
+      console.log('StashSeer Request:', {
+        'Method': options.body ? 'POST' : options.method || 'GET',
+        'URL': baseUrl + subPath,
+        'Headers': JSON.stringify(headers, null, 2),
+        'CF-Access-Client-Id': cfAccessClientId || '(not configured)',
+        'CF-Access-Client-Secret': cfAccessClientSecret ? '***' : '(not configured)',
+      });
       
       const res = await fetch(new URL(subPath.replace(/^\/*/g, ''), baseUrl), {
         method: options.body ? 'POST' : options.method || 'GET',
