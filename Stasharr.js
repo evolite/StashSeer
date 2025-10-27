@@ -490,15 +490,15 @@ img {
       const scenes = await fetchWhisparr('/movie');
       const existingScene = scenes.find((s) => s.stashId === stashId);
 
-      // Check if scene exists, is unmonitored, and has no file (previously downloaded but deleted)
+      // Check if scene exists, is unmonitored, and has no file (previously added and since deleted in stash)
       if (existingScene && !existingScene.monitored && !existingScene.hasFile) {
         const queue = await fetchWhisparr('/queue/details?all=true');
         existingScene.queueStatus = queue.find((queueItem) => queueItem.movieId === existingScene.id);
 
-        // If not in queue, it was previously downloaded but deleted
+        // If not in queue, it was previously added but unmonitored
         if (!existingScene.queueStatus) {
           updateStatus({
-            button: `${icons.deleted}<span>Previously Deleted</span>`,
+            button: `${icons.deleted}<span>Previously Added</span>`,
             className: 'btn-monitor',
             onClick: async () => {
               updateStatus({
