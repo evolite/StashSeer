@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         StashBox - Whisparr v3
+// @name         StashSeer
 // @namespace    http://tampermonkey.net/
 // @version      0.3.1
 // @description  try to take over the world!
