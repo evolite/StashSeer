@@ -16,8 +16,13 @@ Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes
 4. Visit StashDB.org → Click any scene
 5. Click **Settings** button → Configure:
    - Whisparr URL + API key
+   - Whisparr Root Folder Path
    - Stash URL + API key
-   - Root folder path
+   - Cloudflare Zero Trust credentials (if using):
+     - CF-Access-Client-Id
+     - CF-Access-Client-Secret
+     - Enable Cloudflare for Whisparr and/or Stash as needed
+6. If using Cloudflare Zero Trust, ensure your application settings allow stashdb.org in CORS settings
 
 ## Usage
 

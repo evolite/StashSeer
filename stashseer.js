@@ -30,6 +30,8 @@ function getConfig() {
     stashApiKey: GM_getValue('stashApiKey', ''),
     cfAccessClientId: GM_getValue('cfAccessClientId', ''),
     cfAccessClientSecret: GM_getValue('cfAccessClientSecret', ''),
+    whisparrNeedsCloudflare: GM_getValue('whisparrNeedsCloudflare', false),
+    stashNeedsCloudflare: GM_getValue('stashNeedsCloudflare', false),
   };
 }
 
@@ -45,6 +47,8 @@ function setConfig(config) {
   GM_setValue('stashApiKey', config.stashApiKey);
   GM_setValue('cfAccessClientId', config.cfAccessClientId);
   GM_setValue('cfAccessClientSecret', config.cfAccessClientSecret);
+  GM_setValue('whisparrNeedsCloudflare', config.whisparrNeedsCloudflare || false);
+  GM_setValue('stashNeedsCloudflare', config.stashNeedsCloudflare || false);
 }
 
 // Constants
@@ -360,8 +364,20 @@ img {
                  style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
         </div>
         <div style="margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr API Key:</label>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <label style="font-weight: 500;">Whisparr API Key:</label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem;">
+              <input type="checkbox" name="whisparrNeedsCloudflare" ${currentConfig.whisparrNeedsCloudflare ? 'checked' : ''} 
+                     style="width: 1.25rem; height: 1.25rem; cursor: pointer;">
+              Cloudflare Enabled
+            </label>
+          </div>
           <input type="password" name="whisparrApiKey" value="${escapeHtml(currentConfig.whisparrApiKey)}" 
+                 style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr Root Folder Path:</label>
+          <input type="text" name="whisparrRootFolderPath" value="${escapeHtml(currentConfig.whisparrRootFolderPath)}" 
                  style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
         </div>
         <div style="margin-bottom: 1rem;">
@@ -370,20 +386,22 @@ img {
                  style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
         </div>
         <div style="margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Stash API Key:</label>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <label style="font-weight: 500;">Stash API Key:</label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem;">
+              <input type="checkbox" name="stashNeedsCloudflare" ${currentConfig.stashNeedsCloudflare ? 'checked' : ''} 
+                     style="width: 1.25rem; height: 1.25rem; cursor: pointer;">
+              Cloudflare Enabled
+            </label>
+          </div>
           <input type="password" name="stashApiKey" value="${escapeHtml(currentConfig.stashApiKey)}" 
-                 style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
-        </div>
-        <div style="margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Root Folder Path:</label>
-          <input type="text" name="whisparrRootFolderPath" value="${escapeHtml(currentConfig.whisparrRootFolderPath)}" 
                  style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
         </div>
         <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #4a5568;">
           <h4 style="margin: 0 0 0.5rem 0; color: #9f7aea; font-size: 0.875rem;">Cloudflare Zero Trust (Optional)</h4>
           <div style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">CF-Access-Client-Id:</label>
-            <input type="text" name="cfAccessClientId" value="${escapeHtml(currentConfig.cfAccessClientId)}" 
+            <input type="password" name="cfAccessClientId" value="${escapeHtml(currentConfig.cfAccessClientId)}" 
                    style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
           </div>
           <div style="margin-bottom: 1rem;">
@@ -416,6 +434,8 @@ img {
         whisparrRootFolderPath: formData.get('whisparrRootFolderPath'),
         cfAccessClientId: formData.get('cfAccessClientId'),
         cfAccessClientSecret: formData.get('cfAccessClientSecret'),
+        whisparrNeedsCloudflare: formData.get('whisparrNeedsCloudflare') === 'on',
+        stashNeedsCloudflare: formData.get('stashNeedsCloudflare') === 'on',
       };
       setConfig(newConfig);
       document.body.removeChild(dialog);
@@ -982,7 +1002,11 @@ img {
     return stashRes.data.findScenes.scenes[0]?.id;
   }
 
-  const fetchWhisparr = factoryFetchApi(`${whisparrBaseUrl}/api/v3/`, { 'X-Api-Key': whisparrApiKey });
+  const fetchWhisparr = factoryFetchApi(
+    `${whisparrBaseUrl}/api/v3/`, 
+    { 'X-Api-Key': whisparrApiKey },
+    config.whisparrNeedsCloudflare
+  );
 
   /**
    * Executes a GraphQL query against the local Stash instance
@@ -990,7 +1014,11 @@ img {
    * @returns {Promise<Object>} GraphQL response
    */
   async function localStashGraphQl(request) {
-    const fetchLocalStash = factoryFetchApi(localStashGraphQlEndpoint, localStashAuthHeaders);
+    const fetchLocalStash = factoryFetchApi(
+      localStashGraphQlEndpoint, 
+      localStashAuthHeaders,
+      config.stashNeedsCloudflare
+    );
     return fetchLocalStash('', { body: request });
   }
 
@@ -998,9 +1026,10 @@ img {
    * Factory function for creating fetch API wrappers
    * @param {string} baseUrl - Base URL for API requests
    * @param {Object} defaultHeaders - Default headers to include in requests
+   * @param {boolean} addCloudflareHeaders - Whether to add Cloudflare Zero Trust headers
    * @returns {Function} Fetch wrapper function
    */
-  function factoryFetchApi(baseUrl, defaultHeaders) {
+  function factoryFetchApi(baseUrl, defaultHeaders, addCloudflareHeaders = false) {
     return async (subPath, options = {}) => {
       // Build headers with proper priority order
       const headers = {
@@ -1009,22 +1038,15 @@ img {
         ...(options?.headers || {}),
       };
       
-      // Add Cloudflare Zero Trust headers last (highest priority)
-      if (cfAccessClientId) {
-        headers['CF-Access-Client-Id'] = cfAccessClientId;
+      // Add Cloudflare Zero Trust headers only if requested
+      if (addCloudflareHeaders) {
+        if (cfAccessClientId) {
+          headers['CF-Access-Client-Id'] = cfAccessClientId;
+        }
+        if (cfAccessClientSecret) {
+          headers['CF-Access-Client-Secret'] = cfAccessClientSecret;
+        }
       }
-      if (cfAccessClientSecret) {
-        headers['CF-Access-Client-Secret'] = cfAccessClientSecret;
-      }
-      
-      // Debug: log all headers being sent
-      console.log('StashSeer Request:', {
-        'Method': options.body ? 'POST' : options.method || 'GET',
-        'URL': baseUrl + subPath,
-        'Headers': JSON.stringify(headers, null, 2),
-        'CF-Access-Client-Id': cfAccessClientId || '(not configured)',
-        'CF-Access-Client-Secret': cfAccessClientSecret ? '***' : '(not configured)',
-      });
       
       const res = await fetch(new URL(subPath.replace(/^\/*/g, ''), baseUrl), {
         method: options.body ? 'POST' : options.method || 'GET',
