@@ -1022,12 +1022,14 @@ img {
         console.log('StashSeer CF Headers:', {
           'CF-Access-Client-Id': headers['CF-Access-Client-Id'] || '(not set)',
           'CF-Access-Client-Secret': headers['CF-Access-Client-Secret'] ? '***' : '(not set)',
+          'Target URL': baseUrl + subPath,
         });
       }
       
       const res = await fetch(new URL(subPath.replace(/^\/*/g, ''), baseUrl), {
         method: options.body ? 'POST' : options.method || 'GET',
         mode: 'cors',
+        credentials: 'omit',
         ...options,
         ...(options.body ? { body: JSON.stringify(options.body) } : {}),
         headers,
