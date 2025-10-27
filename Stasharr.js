@@ -25,7 +25,6 @@ function getConfig() {
   return {
     whisparrBaseUrl: GM_getValue('whisparrBaseUrl', 'http://localhost:6969'),
     whisparrApiKey: GM_getValue('whisparrApiKey', ''),
-    whisparrNewSiteTags: GM_getValue('whisparrNewSiteTags', [1]),
     whisparrRootFolderPath: GM_getValue('whisparrRootFolderPath', '/data/'),
     localStashRootUrl: GM_getValue('localStashRootUrl', 'http://localhost:9999'),
     stashApiKey: GM_getValue('stashApiKey', ''),
@@ -39,7 +38,6 @@ function getConfig() {
 function setConfig(config) {
   GM_setValue('whisparrBaseUrl', config.whisparrBaseUrl);
   GM_setValue('whisparrApiKey', config.whisparrApiKey);
-  GM_setValue('whisparrNewSiteTags', config.whisparrNewSiteTags);
   GM_setValue('whisparrRootFolderPath', config.whisparrRootFolderPath);
   GM_setValue('localStashRootUrl', config.localStashRootUrl);
   GM_setValue('stashApiKey', config.stashApiKey);
@@ -54,7 +52,6 @@ const DEFAULT_QUALITY_PROFILE_ID = 1;
 const config = getConfig();
 const whisparrBaseUrl = config.whisparrBaseUrl;
 const whisparrApiKey = config.whisparrApiKey;
-const whisparrNewSiteTags = config.whisparrNewSiteTags;
 const whisparrRootFolderPath = config.whisparrRootFolderPath;
 const localStashRootUrl = config.localStashRootUrl;
 const localStashGraphQlEndpoint = `${localStashRootUrl}/graphql`;
@@ -375,11 +372,6 @@ img {
           <input type="text" name="whisparrRootFolderPath" value="${escapeHtml(currentConfig.whisparrRootFolderPath)}" 
                  style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
         </div>
-        <div style="margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">New Site Tags (comma-separated):</label>
-          <input type="text" name="whisparrNewSiteTags" value="${escapeHtml(currentConfig.whisparrNewSiteTags.join(','))}" 
-                 style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
-        </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
           <button type="button" id="cancelBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
           <button type="submit" style="padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Save</button>
@@ -396,17 +388,12 @@ img {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const formData = new FormData(form);
-      const tagsInput = formData.get('whisparrNewSiteTags') || '';
       const newConfig = {
         whisparrBaseUrl: formData.get('whisparrBaseUrl'),
         whisparrApiKey: formData.get('whisparrApiKey'),
         localStashRootUrl: formData.get('localStashRootUrl'),
         stashApiKey: formData.get('stashApiKey'),
         whisparrRootFolderPath: formData.get('whisparrRootFolderPath'),
-        whisparrNewSiteTags: tagsInput
-          .split(',')
-          .map((id) => parseInt(id.trim(), 10))
-          .filter((id) => !Number.isNaN(id) && id > 0),
       };
       setConfig(newConfig);
       document.body.removeChild(dialog);
@@ -676,7 +663,7 @@ img {
           qualityProfileId: DEFAULT_QUALITY_PROFILE_ID,
           rootFolderPath: whisparrRootFolderPath,
           stashId,
-          tags: whisparrNewSiteTags,
+          tags: [],
           title: 'added via stashdb extension',
         },
       });
@@ -714,7 +701,7 @@ img {
           qualityProfileId: DEFAULT_QUALITY_PROFILE_ID,
           rootFolderPath: whisparrRootFolderPath,
           stashId,
-          tags: whisparrNewSiteTags,
+          tags: [],
           title: 'added via stashdb extension',
         },
       });
@@ -778,9 +765,7 @@ img {
         stashId: whisparrScene.stashId,
         title: whisparrScene.title,
         path: whisparrScene.path,
-        tags: monitor
-          ? whisparrScene.tags.filter((tag) => !whisparrNewSiteTags.includes(tag))
-          : [...whisparrScene.tags, ...whisparrNewSiteTags],
+        tags: whisparrScene.tags,
       },
     });
 
@@ -797,27 +782,6 @@ img {
     }
 
     return result;
-  }
-
-  /**
-   * Removes auto-added tags from a Whisparr scene
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @returns {Promise<Object>} Updated scene object
-   */
-  async function removeAutoTags(whisparrScene) {
-    return await fetchWhisparr(`/movie/${whisparrScene.id}`, {
-      method: 'PUT',
-      body: {
-        foreignId: whisparrScene.foreignId,
-        monitored: whisparrScene.monitored,
-        qualityProfileId: whisparrScene.qualityProfileId,
-        rootFolderPath: whisparrScene.rootFolderPath,
-        stashId: whisparrScene.stashId,
-        title: whisparrScene.title,
-        path: whisparrScene.path,
-        tags: whisparrScene.tags.filter((tag) => !whisparrNewSiteTags.includes(tag)),
-      },
-    });
   }
 
   /**
@@ -854,7 +818,6 @@ img {
         movieIds: [whisparrScene.id],
       },
     });
-    await removeAutoTags(whisparrScene);
   }
 
   /**
