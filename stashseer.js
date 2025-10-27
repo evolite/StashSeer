@@ -1002,19 +1002,35 @@ img {
    */
   function factoryFetchApi(baseUrl, defaultHeaders) {
     return async (subPath, options = {}) => {
+      // Build headers with proper priority order
+      const headers = {
+        ...defaultHeaders,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options?.headers || {}),
+      };
+      
+      // Add Cloudflare Zero Trust headers last (highest priority)
+      if (cfAccessClientId) {
+        headers['CF-Access-Client-Id'] = cfAccessClientId;
+      }
+      if (cfAccessClientSecret) {
+        headers['CF-Access-Client-Secret'] = cfAccessClientSecret;
+      }
+      
+      // Debug: log headers if CF is configured
+      if (cfAccessClientId || cfAccessClientSecret) {
+        console.log('StashSeer CF Headers:', {
+          'CF-Access-Client-Id': headers['CF-Access-Client-Id'] || '(not set)',
+          'CF-Access-Client-Secret': headers['CF-Access-Client-Secret'] ? '***' : '(not set)',
+        });
+      }
+      
       const res = await fetch(new URL(subPath.replace(/^\/*/g, ''), baseUrl), {
         method: options.body ? 'POST' : options.method || 'GET',
         mode: 'cors',
         ...options,
         ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-        headers: {
-          ...defaultHeaders,
-          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-          ...(options?.headers || {}),
-          // Add Cloudflare Zero Trust headers if configured
-          ...(cfAccessClientId ? { 'CF-Access-Client-Id': cfAccessClientId } : {}),
-          ...(cfAccessClientSecret ? { 'CF-Access-Client-Secret': cfAccessClientSecret } : {}),
-        },
+        headers,
       });
       if (!res.ok) {
         let body;
