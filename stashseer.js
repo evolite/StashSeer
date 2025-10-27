@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.3.1
 // @description  Integration between StashDB, Whisparr, and Stash - adds download/monitor/play buttons to StashDB scene pages
-// @author       evolite
+// @author       AI Guided
 // @match        https://stashdb.org/
 // @match        https://stashdb.org/*
 // @icon.disabled         https://www.google.com/s2/favicons?sz=64&domain=stashdb.org
@@ -190,6 +190,17 @@ body {
   border-color: rgba(156, 39, 176, 0.5);
 }
 
+.downloadInWhisparr button.btn-stash {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fc8181;
+}
+
+.downloadInWhisparr button.btn-stash:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
 .downloadInWhisparr button.btn-settings {
   background: rgba(108, 117, 125, 0.15);
   border-color: rgba(108, 117, 125, 0.3);
@@ -240,6 +251,7 @@ body {
     error: `<svg viewBox="0 0 16 16"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`,
     check: `<svg viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>`,
     whisparr: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/></svg>`,
+    stash: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm8 1a1 1 0 1 0-2 0 1 1 0 0 0 2 0zm2 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0z"/></svg>`,
     settings: `<svg viewBox="0 0 16 16"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319z"/></svg>`,
   };
 
@@ -262,6 +274,7 @@ body {
     const containerElm = document.createElement('div');
     const dlButtonElm = document.createElement('button');
     const whisparrButtonElm = document.createElement('button');
+    const stashButtonElm = document.createElement('button');
     const settingsButtonElm = document.createElement('button');
     const statusElm = document.createElement('span');
     containerElm.classList.add('downloadInWhisparr');
@@ -277,6 +290,18 @@ body {
         newWindow.focus();
       } else {
         console.warn('Failed to open Whisparr in new window. Check popup blocker.');
+      }
+    });
+
+    // Add Stash button
+    stashButtonElm.innerHTML = `${icons.stash}<span>Stash</span>`;
+    stashButtonElm.classList.add('btn-stash');
+    stashButtonElm.addEventListener('click', () => {
+      const newWindow = window.open(localStashRootUrl, '_blank');
+      if (newWindow) {
+        newWindow.focus();
+      } else {
+        console.warn('Failed to open Stash in new window. Check popup blocker.');
       }
     });
 
@@ -316,6 +341,7 @@ body {
     updateStatus('Loading...');
     containerElm.appendChild(dlButtonElm);
     containerElm.appendChild(whisparrButtonElm);
+    containerElm.appendChild(stashButtonElm);
     containerElm.appendChild(settingsButtonElm);
     containerElm.appendChild(statusElm);
     return { downloadElm: containerElm, updateStatus };
