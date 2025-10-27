@@ -500,7 +500,28 @@ img {
           updateStatus({
             button: `${icons.deleted}<span>Previously Deleted</span>`,
             className: 'btn-monitor',
-            extra: 'This scene was downloaded before but the file was deleted',
+            onClick: async () => {
+              updateStatus({
+                button: `${icons.loading}<span>Enabling monitoring...</span>`,
+                className: 'btn-loading',
+                extra: '',
+              });
+              try {
+                await monitorScene(true, existingScene);
+                updateStatus({
+                  button: `${icons.monitor}<span>Monitored</span>`,
+                  className: 'btn-monitor',
+                  extra: '',
+                });
+              } catch (error) {
+                console.error('Error enabling monitoring:', error);
+                updateStatus({
+                  button: `${icons.error}<span>Error</span>`,
+                  className: 'btn-error',
+                  extra: 'Failed to enable monitoring',
+                });
+              }
+            },
           });
           return;
         }
