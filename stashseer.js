@@ -191,14 +191,14 @@ body {
 }
 
 .downloadInWhisparr button.btn-stash {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #fc8181;
+  background: rgba(139, 90, 43, 0.15);
+  border-color: rgba(139, 90, 43, 0.3);
+  color: #d4a574;
 }
 
 .downloadInWhisparr button.btn-stash:hover {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(139, 90, 43, 0.25);
+  border-color: rgba(139, 90, 43, 0.5);
 }
 
 .downloadInWhisparr button.btn-settings {
