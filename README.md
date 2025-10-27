@@ -11,7 +11,7 @@ Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes
 ## Setup
 
 1. Install Tampermonkey
-2. Add `Stasharr.js` to Tampermonkey
+2. Add `stashseer.js` to Tampermonkey
 3. Configure Whisparr: Settings → Media Management → File Management → Enable **Unmonitor Deleted Movies**
 4. Visit StashDB.org → Click any scene
 5. Click **Settings** button → Configure:
