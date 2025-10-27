@@ -17,7 +17,6 @@ Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes
    - Whisparr URL + API key
    - Stash URL + API key
    - Root folder path
-   - Tag IDs for new scenes
 
 ## Usage
 
