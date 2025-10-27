@@ -2,12 +2,11 @@
 // @name         StashSeer
 // @namespace    http://tampermonkey.net/
 // @version      0.3.1
-// @description  try to take over the world!
+// @description  Integration between StashDB, Whisparr, and Stash - adds download/monitor/play buttons to StashDB scene pages
 // @author       evolite
 // @match        https://stashdb.org/
 // @match        https://stashdb.org/*
 // @icon.disabled         https://www.google.com/s2/favicons?sz=64&domain=stashdb.org
-// @updateURL
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -53,8 +52,9 @@ function setConfig(config) {
 
 // Constants
 const POLLING_INTERVAL_MS = 50;
-const SEARCH_TRIGGER_DELAY_MS = 2000;
+const SEARCH_TRIGGER_DELAY_MS = 500;
 const DEFAULT_QUALITY_PROFILE_ID = 1;
+const MAX_ELEMENT_WAIT_MS = 10000; // 10 seconds max wait for DOM elements
 
 // Get current configuration
 const config = getConfig();
@@ -227,9 +227,6 @@ body {
   text-decoration: underline;
 }
 
-img {
-  /* filter: blur(4px); */
-}
 `);
 
   // SVG Icons
@@ -437,6 +434,27 @@ img {
         whisparrNeedsCloudflare: formData.get('whisparrNeedsCloudflare') === 'on',
         stashNeedsCloudflare: formData.get('stashNeedsCloudflare') === 'on',
       };
+
+      // Validate required fields
+      if (!newConfig.whisparrBaseUrl || !newConfig.whisparrApiKey) {
+        alert('Whisparr Base URL and API Key are required!');
+        return;
+      }
+
+      if (!newConfig.localStashRootUrl || !newConfig.stashApiKey) {
+        alert('Stash Root URL and API Key are required!');
+        return;
+      }
+
+      // Validate URL format
+      try {
+        new URL(newConfig.whisparrBaseUrl);
+        new URL(newConfig.localStashRootUrl);
+      } catch (error) {
+        alert('Invalid URL format! Please check your URLs.');
+        return;
+      }
+
       setConfig(newConfig);
       document.body.removeChild(dialog);
       alert('Settings saved! Refresh the page to apply changes.');
@@ -457,13 +475,21 @@ img {
    * Adds download button to the scene page
    * @param {HTMLElement} downloadElm - The download button element to add
    * @returns {Promise<void>}
+   * @throws {Error} If parent element is not found within timeout
    */
   async function addButtonToScenePage(downloadElm) {
+    const startTime = Date.now();
     let parentElement;
 
-    while (!parentElement) {
+    while (!parentElement && (Date.now() - startTime) < MAX_ELEMENT_WAIT_MS) {
       parentElement = document.querySelector('.NarrowPage > .nav-tabs');
-      await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS));
+      if (!parentElement) {
+        await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS));
+      }
+    }
+
+    if (!parentElement) {
+      throw new Error('Timeout waiting for parent element (.NarrowPage > .nav-tabs)');
     }
 
     parentElement.appendChild(downloadElm);
@@ -473,10 +499,26 @@ img {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node.nodeType === 1 && node.classList.contains('scene-info')) {
-          const { downloadElm, updateStatus } = createButton();
-          await addButtonToScenePage(downloadElm);
-          const stashId = location.pathname.split('/')[2];
-          await checkIfAvailable(stashId, updateStatus);
+          try {
+            const { downloadElm, updateStatus } = createButton();
+            await addButtonToScenePage(downloadElm);
+            const stashId = location.pathname.split('/')[2];
+            
+            // Validate stashId (StashDB uses UUID format)
+            if (!stashId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stashId)) {
+              console.error('Invalid stashId format:', stashId);
+              updateStatus({
+                button: `${icons.error}<span>Error</span>`,
+                className: 'btn-error',
+                extra: 'Invalid scene ID format',
+              });
+              return;
+            }
+            
+            await checkIfAvailable(stashId, updateStatus);
+          } catch (error) {
+            console.error('Error adding button to scene page:', error);
+          }
         }
       }
     }
@@ -484,6 +526,11 @@ img {
 
   const observerConfig = { subtree: true, childList: true };
   observer.observe(document, observerConfig);
+
+  // Cleanup observer when page unloads
+  window.addEventListener('beforeunload', () => {
+    observer.disconnect();
+  });
 
   /**
    * Checks if a scene is available in Stash or Whisparr
@@ -528,13 +575,10 @@ img {
     });
 
     try {
-      const scenes = await fetchWhisparr('/movie');
-      const existingScene = scenes.find((s) => s.stashId === stashId);
+      const existingScene = await fetchSceneWithQueueStatus(stashId);
 
       // Check if scene exists, is unmonitored, and has no file (previously added and since deleted in stash)
       if (existingScene && !existingScene.monitored && !existingScene.hasFile) {
-        const queue = await fetchWhisparr('/queue/details?all=true');
-        existingScene.queueStatus = queue.find((queueItem) => queueItem.movieId === existingScene.id);
 
         // If not in queue, it was previously added but unmonitored
         if (!existingScene.queueStatus) {
@@ -579,39 +623,45 @@ img {
       throw error;
     }
 
+    /**
+     * Updates button to show scene is currently monitored
+     * Click action: Disables monitoring for the scene
+     */
     function updateStatusToMonitored() {
       updateStatus({
         button: `${icons.monitor}<span>Monitored</span>`,
         className: 'btn-monitor',
         extra: '',
         onClick: async () => {
-          // If scene doesn't exist in Whisparr yet, add it as monitored
+          // Disable monitoring
           if (!whisparrScene || !whisparrScene.id) {
-            try {
-              whisparrScene = await ensureSceneAddedAsMonitored(stashId);
-              updateStatusToMonitored();
-              return;
-            } catch (error) {
-              console.error('Error adding scene as monitored:', error);
-              return;
-            }
+            console.error('Cannot toggle monitoring: scene not found');
+            return;
           }
 
-          // If scene exists, toggle monitoring
-          whisparrScene = await monitorScene(true, whisparrScene);
-          updateStatusToMonitored();
+          try {
+            whisparrScene = await monitorScene(false, whisparrScene);
+            updateStatusToUnmonitored();
+          } catch (error) {
+            console.error('Error disabling monitoring:', error);
+          }
         },
       });
     }
 
+    /**
+     * Updates button to show scene is currently unmonitored
+     * Click action: Enables monitoring for the scene
+     */
     function updateStatusToUnmonitored() {
       updateStatus({
         button: `${icons.monitorOff}<span>Monitor</span>`,
         className: 'btn-monitor',
         extra: '',
         onClick: async () => {
-          // If scene doesn't exist in Whisparr yet, add it as monitored
+          // Enable monitoring
           if (!whisparrScene || !whisparrScene.id) {
+            // Scene doesn't exist yet, add it as monitored
             try {
               whisparrScene = await ensureSceneAddedAsMonitored(stashId);
               updateStatusToMonitored();
@@ -622,9 +672,13 @@ img {
             }
           }
 
-          // If scene exists, toggle monitoring
-          whisparrScene = await monitorScene(true, whisparrScene);
-          updateStatusToMonitored();
+          // Scene exists, enable monitoring
+          try {
+            whisparrScene = await monitorScene(true, whisparrScene);
+            updateStatusToMonitored();
+          } catch (error) {
+            console.error('Error enabling monitoring:', error);
+          }
         },
       });
     }
@@ -646,10 +700,10 @@ img {
         },
       });
       return;
-    } if (whisparrScene.monitored) {
+    } else if (whisparrScene.monitored) {
       updateStatusToMonitored();
       return;
-    } if (whisparrScene.queueStatus) {
+    } else if (whisparrScene.queueStatus) {
       updateStatus({
         button: `${icons.loading}<span>Downloading</span>`,
         className: 'btn-loading',
@@ -718,18 +772,30 @@ img {
   }
 
   /**
+   * Fetches a scene from Whisparr by stashId and adds queue status if no file exists
+   * @param {string} stashId - The StashDB scene ID
+   * @returns {Promise<Object|null>} The Whisparr scene object or null if not found
+   */
+  async function fetchSceneWithQueueStatus(stashId) {
+    const scenes = await fetchWhisparr('/movie');
+    const scene = scenes.find((s) => s.stashId === stashId);
+    
+    if (scene && !scene.hasFile) {
+      const queue = await fetchWhisparr('/queue/details?all=true');
+      scene.queueStatus = queue.find((queueItem) => queueItem.movieId === scene.id);
+    }
+    
+    return scene || null;
+  }
+
+  /**
    * Ensures a scene is added to Whisparr (unmonitored)
    * @param {string} stashId - The StashDB scene ID
    * @returns {Promise<Object>} The Whisparr scene object
    */
   async function ensureSceneAdded(stashId) {
-    const scenes = await fetchWhisparr('/movie');
-    const scene = scenes.find((s) => s.stashId === stashId);
+    const scene = await fetchSceneWithQueueStatus(stashId);
     if (scene) {
-      if (!scene.hasFile) {
-        const queue = await fetchWhisparr('/queue/details?all=true');
-        scene.queueStatus = queue.find((queueItem) => queueItem.movieId === scene.id);
-      }
       return scene;
     }
 
@@ -761,13 +827,8 @@ img {
    * @returns {Promise<Object>} The Whisparr scene object
    */
   async function ensureSceneAddedAsMonitored(stashId) {
-    const scenes = await fetchWhisparr('/movie');
-    const scene = scenes.find((s) => s.stashId === stashId);
+    const scene = await fetchSceneWithQueueStatus(stashId);
     if (scene) {
-      if (!scene.hasFile) {
-        const queue = await fetchWhisparr('/queue/details?all=true');
-        scene.queueStatus = queue.find((queueItem) => queueItem.movieId === scene.id);
-      }
       return scene;
     }
 
@@ -832,7 +893,7 @@ img {
 
   /**
    * Updates monitoring status of a scene in Whisparr
-   * @param {boolean} monitor - Whether to monitor the scene
+   * @param {boolean} monitor - Whether to monitor the scene (true = enabled, false = disabled)
    * @param {Object} whisparrScene - The Whisparr scene object
    * @returns {Promise<Object>} Updated scene object
    */
@@ -979,27 +1040,32 @@ img {
    * @returns {Promise<string|undefined>} The local Stash scene ID
    */
   async function getLocalStashSceneId(whisparrScene) {
-    const stashRes = await localStashGraphQl({
-      variables: {
-        scene_filter: {
-          stash_id_endpoint: {
-            endpoint: '',
-            modifier: 'EQUALS',
-            stash_id: whisparrScene.stashId,
+    try {
+      const stashRes = await localStashGraphQl({
+        variables: {
+          scene_filter: {
+            stash_id_endpoint: {
+              endpoint: '',
+              modifier: 'EQUALS',
+              stash_id: whisparrScene.stashId,
+            },
           },
         },
-      },
-      query: `
-        query ($scene_filter: SceneFilterType) {
-          findScenes(scene_filter: $scene_filter) {
-            scenes {
-              id
+        query: `
+          query ($scene_filter: SceneFilterType) {
+            findScenes(scene_filter: $scene_filter) {
+              scenes {
+                id
+              }
             }
           }
-        }
-      `,
-    });
-    return stashRes.data.findScenes.scenes[0]?.id;
+        `,
+      });
+      return stashRes.data.findScenes.scenes[0]?.id;
+    } catch (error) {
+      console.error('Error getting local Stash scene ID:', error);
+      return undefined;
+    }
   }
 
   const fetchWhisparr = factoryFetchApi(
