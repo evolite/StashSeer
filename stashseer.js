@@ -575,7 +575,7 @@ body {
     });
 
     try {
-      const existingScene = await fetchSceneWithQueueStatus(stashId);
+      let existingScene = await fetchSceneWithQueueStatus(stashId);
 
       // Check if scene exists, is unmonitored, and has no file (previously added and since deleted in stash)
       if (existingScene && !existingScene.monitored && !existingScene.hasFile) {
@@ -612,15 +612,69 @@ body {
         }
       }
 
-      whisparrScene = await ensureSceneAdded(stashId);
+      // Only add scene if it already exists in Whisparr, otherwise show "Monitor" button
+      if (existingScene) {
+        whisparrScene = existingScene;
+      } else {
+        // Scene doesn't exist in Whisparr yet, show "Monitor" button to let user add it
+        updateStatus({
+          button: `${icons.monitorOff}<span>Monitor</span>`,
+          className: 'btn-monitor',
+          extra: '',
+          onClick: async () => {
+            updateStatus({
+              button: `${icons.loading}<span>Adding to Whisparr...</span>`,
+              className: 'btn-loading',
+              extra: '',
+            });
+            try {
+              whisparrScene = await ensureSceneAddedAsMonitored(stashId);
+              
+              // Check status after adding
+              if (whisparrScene.hasFile) {
+                const localStashSceneId = await getLocalStashSceneId(whisparrScene);
+                const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
+                updateStatus({
+                  button: `${icons.play}<span>Play</span>`,
+                  className: 'btn-play',
+                  extra: '',
+                  onClick: () => {
+                    const newWindow = window.open(stashUrl, '_blank');
+                    if (newWindow) {
+                      newWindow.focus();
+                    } else {
+                      console.warn('Failed to open Stash scene. Check popup blocker.');
+                    }
+                  },
+                });
+              } else {
+                updateStatusToMonitored();
+              }
+            } catch (error) {
+              console.error('Error adding scene to Whisparr:', error);
+              updateStatus({
+                button: `${icons.error}<span>Error</span>`,
+                className: 'btn-error',
+                extra: 'Failed to add scene to Whisparr',
+              });
+            }
+          },
+        });
+        return;
+      }
     } catch (error) {
-      console.error('Error adding scene in Whisparr:', error);
+      console.error('Error checking scene in Whisparr:', error);
       updateStatus({
         button: `${icons.error}<span>Error</span>`,
         className: 'btn-error',
-        extra: 'Error adding scene in Whisparr',
+        extra: 'Error checking scene in Whisparr',
       });
       throw error;
+    }
+
+    // Now handle scenes that exist in Whisparr
+    if (!whisparrScene) {
+      return; // Should not happen, but safety check
     }
 
     /**
