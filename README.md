@@ -27,6 +27,7 @@ Browse StashDB scenes, buttons show:
 - **Monitor** - Enable monitoring (auto-triggers search)
 - **Monitored** - Already being monitored
 - **Downloading** - Currently in queue
+- **Previously Added** - Scene was added to Whisparr but file was deleted (click to re-monitor)
 
 ---
 
