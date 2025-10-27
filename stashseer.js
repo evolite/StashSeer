@@ -715,7 +715,7 @@ body {
     let fileDownloadAvailability;
 
     updateStatus({
-      button: `${icons.loading}<span>Checking...</span>`,
+      button: `${icons.loading}<span>Checking download availability...</span>`,
       className: 'btn-loading',
       extra: '',
     });
@@ -727,7 +727,7 @@ body {
       updateStatus({
         button: `${icons.error}<span>Error</span>`,
         className: 'btn-error',
-        extra: 'Error checking if scene available for download',
+        extra: 'Error checking download availability',
       });
       throw error;
     }
@@ -742,11 +742,13 @@ body {
             updateStatus({
               button: `${icons.loading}<span>Downloading</span>`,
               className: 'btn-loading',
-              extra: 'Adding to download queue...',
+              extra: 'Searching Whisparr for releases...',
               onClick: () => {},
             });
             await downloadVideo(whisparrScene);
             updateStatus({
+              button: `${icons.loading}<span>Downloading</span>`,
+              className: 'btn-loading',
               extra: `Added to <a href="${whisparrBaseUrl}/activity/queue">download queue</a>.`,
             });
           },
