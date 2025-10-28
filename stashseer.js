@@ -603,13 +603,11 @@ body {
         const timeleft = item.timeleftSeconds != null ? item.timeleftSeconds : (item.timeleft || null);
 
         const percentLabel = percent != null ? `${percent}%` : 'Downloading';
-        const sizeLabel = done != null ? `${formatBytes(done)} / ${formatBytes(total)}` : (total ? `${formatBytes(total)}` : 'unknown size');
-        const etaLabel = timeleft != null ? `ETA ${formatSeconds(timeleft)}` : '';
 
         updateStatus({
           button: `${icons.loading}<span>${percentLabel}</span>`,
           className: 'btn-loading',
-          extra: `${sizeLabel}${etaLabel ? ` — ${etaLabel}` : ''} · View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
+          extra: '',
         });
 
         // If complete (left is 0), stop polling
