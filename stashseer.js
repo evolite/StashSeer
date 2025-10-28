@@ -558,6 +558,74 @@ body {
     observer.disconnect();
   });
 
+  // Track active queue pollers per movie to avoid duplicates
+  const activeQueuePollers = new Map(); // movieId -> intervalId
+
+  function formatBytes(bytes) {
+    if (bytes === 0 || !isFinite(bytes)) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const value = bytes / Math.pow(1024, i);
+    return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[i]}`;
+  }
+
+  function formatSeconds(seconds) {
+    if (seconds == null || !isFinite(seconds) || seconds < 0) return '—';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
+  }
+
+  /**
+   * Starts polling Whisparr queue for a movie and updates the button extra with progress
+   * @param {number} movieId
+   * @param {Function} updateStatus
+   */
+  function startQueueProgressPolling(movieId, updateStatus) {
+    if (activeQueuePollers.has(movieId)) return; // already polling
+
+    const intervalId = setInterval(async () => {
+      try {
+        const queue = await fetchWhisparr('/queue/details?all=true');
+        const item = queue.find((q) => q.movieId === movieId);
+        if (!item) {
+          // Not in queue anymore; stop polling
+          clearInterval(intervalId);
+          activeQueuePollers.delete(movieId);
+          return;
+        }
+
+        const total = item.size || item.sizeNz || 0;
+        const left = item.sizeleft != null ? item.sizeleft : (item.sizeLeft || 0);
+        const done = total && left != null ? (total - left) : null;
+        const percent = total && left != null ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100))) : null;
+        const timeleft = item.timeleftSeconds != null ? item.timeleftSeconds : (item.timeleft || null);
+
+        const percentLabel = percent != null ? `${percent}%` : 'Downloading';
+        const sizeLabel = done != null ? `${formatBytes(done)} / ${formatBytes(total)}` : (total ? `${formatBytes(total)}` : 'unknown size');
+        const etaLabel = timeleft != null ? `ETA ${formatSeconds(timeleft)}` : '';
+
+        updateStatus({
+          button: `${icons.loading}<span>${percentLabel}</span>`,
+          className: 'btn-loading',
+          extra: `${sizeLabel}${etaLabel ? ` — ${etaLabel}` : ''} · View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
+        });
+
+        // If complete (left is 0), stop polling
+        if (left === 0) {
+          clearInterval(intervalId);
+          activeQueuePollers.delete(movieId);
+        }
+      } catch (e) {
+        // Keep polling; transient errors are expected
+        // No console spam here to avoid noise
+      }
+    }, 5000);
+
+    activeQueuePollers.set(movieId, intervalId);
+  }
+
   /**
    * Checks if a scene is available in Stash or Whisparr
    * @param {string} stashId - The StashDB scene ID
@@ -789,6 +857,9 @@ body {
         className: 'btn-loading',
         extra: `View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
       });
+      if (whisparrScene.id) {
+        startQueueProgressPolling(whisparrScene.id, updateStatus);
+      }
       return;
     }
 
@@ -831,6 +902,9 @@ body {
               className: 'btn-loading',
               extra: `Added to <a href="${whisparrBaseUrl}/activity/queue">download queue</a>.`,
             });
+            if (whisparrScene.id) {
+              startQueueProgressPolling(whisparrScene.id, updateStatus);
+            }
           },
         });
         break;
@@ -840,6 +914,9 @@ body {
           className: 'btn-loading',
           extra: `View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
         });
+        if (whisparrScene.id) {
+          startQueueProgressPolling(whisparrScene.id, updateStatus);
+        }
         break;
       case 'not available for download':
         updateStatusToUnmonitored();
