@@ -848,9 +848,6 @@ body {
         },
       });
       return;
-    } else if (whisparrScene.monitored) {
-      updateStatusToMonitored();
-      return;
     } else if (whisparrScene.queueStatus) {
       updateStatus({
         button: `${icons.loading}<span>Downloading</span>`,
@@ -860,6 +857,27 @@ body {
       if (whisparrScene.id) {
         startQueueProgressPolling(whisparrScene.id, updateStatus);
       }
+      return;
+    } else if (whisparrScene.monitored) {
+      // Double-check live queue even if queueStatus wasn't attached earlier
+      try {
+        const queue = await fetchWhisparr('/queue/details?all=true');
+        const qItem = queue.find((q) => q.movieId === whisparrScene.id);
+        if (qItem) {
+          updateStatus({
+            button: `${icons.loading}<span>Downloading</span>`,
+            className: 'btn-loading',
+            extra: `View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
+          });
+          if (whisparrScene.id) {
+            startQueueProgressPolling(whisparrScene.id, updateStatus);
+          }
+          return;
+        }
+      } catch (e) {
+        // ignore errors and fall back to monitored state
+      }
+      updateStatusToMonitored();
       return;
     }
 
