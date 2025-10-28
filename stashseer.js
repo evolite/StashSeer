@@ -6,7 +6,7 @@
 // @author       AI Guided
 // @match        https://stashdb.org/
 // @match        https://stashdb.org/*
-// @icon         https://stashdb.org/favicon.ico
+// @icon         https://raw.githubusercontent.com/stashapp/StashDB-Docs/refs/heads/main/favicon.ico
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
