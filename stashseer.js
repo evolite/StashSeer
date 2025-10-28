@@ -56,11 +56,6 @@ const SEARCH_TRIGGER_DELAY_MS = 500;
 const DEFAULT_QUALITY_PROFILE_ID = 1;
 const MAX_ELEMENT_WAIT_MS = 10000; // 10 seconds max wait for DOM elements
 const QUEUE_POLL_INTERVAL_MS = 3000; // Poll Whisparr queue
-const POST_MONITOR_RECHECK_DELAY_MS = 10000; // After enabling monitoring, recheck queue after 10s
-const BYTE_UNIT_BASE = 1024; // KB/MB/GB conversion base
-const BYTE_VALUE_FIXED_THRESHOLD = 10; // value>=10 -> 0 decimals, else 1
-const SECONDS_PER_HOUR = 3600;
-const SECONDS_PER_MINUTE = 60;
 const STASHDB_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Get current configuration
@@ -568,21 +563,7 @@ body {
   // Track active queue pollers per movie to avoid duplicates
   const activeQueuePollers = new Map(); // movieId -> intervalId
 
-  function formatBytes(bytes) {
-    if (bytes === 0 || !isFinite(bytes)) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(BYTE_UNIT_BASE));
-    const value = bytes / Math.pow(BYTE_UNIT_BASE, i);
-    return `${value.toFixed(value >= BYTE_VALUE_FIXED_THRESHOLD ? 0 : 1)} ${units[i]}`;
-  }
-
-  function formatSeconds(seconds) {
-    if (seconds == null || !isFinite(seconds) || seconds < 0) return '—';
-    const h = Math.floor(seconds / SECONDS_PER_HOUR);
-    const m = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
-    const s = Math.floor(seconds % SECONDS_PER_MINUTE);
-    return h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
-  }
+  // Previously used to show size/ETA in progress. Kept minimal until needed again.
 
   /**
    * Starts polling Whisparr queue for a movie and updates the button extra with progress
@@ -597,9 +578,48 @@ body {
         const queue = await fetchWhisparr('/queue/details?all=true');
         const item = queue.find((q) => q.movieId === movieId);
         if (!item) {
-          // Not in queue anymore; stop polling
+          // Not in queue anymore; stop polling and attempt to update final state
           clearInterval(intervalId);
           activeQueuePollers.delete(movieId);
+          try {
+            // Re-fetch the movie to determine if file is available now
+            const movies = await fetchWhisparr('/movie');
+            const movie = movies.find((m) => m.id === movieId);
+            if (movie && movie.hasFile) {
+              const localStashSceneId = await getLocalStashSceneId(movie);
+              if (localStashSceneId) {
+                const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
+                updateStatus({
+                  button: `${icons.play}<span>Play</span>`,
+                  className: 'btn-play',
+                  extra: '',
+                  onClick: () => {
+                    const newWindow = window.open(stashUrl, '_blank');
+                    if (newWindow) newWindow.focus();
+                  },
+                });
+              } else {
+                updateStatus({
+                  button: `${icons.monitor}<span>Monitored</span>`,
+                  className: 'btn-monitor',
+                  extra: '',
+                });
+              }
+            } else {
+              updateStatus({
+                button: `${icons.monitor}<span>Monitored</span>`,
+                className: 'btn-monitor',
+                extra: '',
+              });
+            }
+          } catch (_) {
+            // On error, fall back to monitored state
+            updateStatus({
+              button: `${icons.monitor}<span>Monitored</span>`,
+              className: 'btn-monitor',
+              extra: '',
+            });
+          }
           return;
         }
 
