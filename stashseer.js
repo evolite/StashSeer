@@ -56,7 +56,7 @@ const SEARCH_TRIGGER_DELAY_MS = 500;
 const DEFAULT_QUALITY_PROFILE_ID = 1;
 const MAX_ELEMENT_WAIT_MS = 10000; // 10 seconds max wait for DOM elements
 const QUEUE_POLL_INTERVAL_MS = 3000; // Poll Whisparr queue
-const POST_MONITOR_RECHECK_DELAY_MS = 3000; // After enabling monitoring, recheck queue after 5s
+const POST_MONITOR_RECHECK_DELAY_MS = 10000; // After enabling monitoring, recheck queue after 10s
 const BYTE_UNIT_BASE = 1024; // KB/MB/GB conversion base
 const BYTE_VALUE_FIXED_THRESHOLD = 10; // value>=10 -> 0 decimals, else 1
 const SECONDS_PER_HOUR = 3600;
@@ -632,31 +632,6 @@ body {
   }
 
   /**
-   * After enabling monitoring, wait ~5s then check if item entered the queue; if so, show downloading and start polling
-   * @param {number} movieId
-   * @param {Function} updateStatus
-   */
-  function scheduleQueueCheck(movieId, updateStatus) {
-    if (!movieId) return;
-    setTimeout(async () => {
-      try {
-        const queue = await fetchWhisparr('/queue/details?all=true');
-        const qItem = queue.find((q) => q.movieId === movieId);
-        if (qItem) {
-          updateStatus({
-            button: `${icons.loading}<span>Downloading</span>`,
-            className: 'btn-loading',
-            extra: '',
-          });
-          startQueueProgressPolling(movieId, updateStatus);
-        }
-      } catch (_) {
-        // ignore transient errors
-      }
-    }, POST_MONITOR_RECHECK_DELAY_MS);
-  }
-
-  /**
    * Checks if a scene is available in Stash or Whisparr
    * @param {string} stashId - The StashDB scene ID
    * @param {Function} updateStatus - Function to update button status
@@ -843,7 +818,6 @@ body {
             try {
               whisparrScene = await ensureSceneAddedAsMonitored(stashId);
               updateStatusToMonitored();
-              scheduleQueueCheck(whisparrScene.id, updateStatus);
               return;
             } catch (error) {
               console.error('Error adding scene as monitored:', error);
@@ -855,7 +829,6 @@ body {
           try {
             whisparrScene = await monitorScene(true, whisparrScene);
             updateStatusToMonitored();
-            scheduleQueueCheck(whisparrScene.id, updateStatus);
           } catch (error) {
             console.error('Error enabling monitoring:', error);
           }
@@ -954,8 +927,6 @@ body {
             });
             if (whisparrScene.id) {
               startQueueProgressPolling(whisparrScene.id, updateStatus);
-          // Also schedule a follow-up queue check after 5s in case the grab happens slightly delayed
-          scheduleQueueCheck(whisparrScene.id, updateStatus);
             }
           },
         });
