@@ -58,6 +58,135 @@ const MAX_ELEMENT_WAIT_MS = 10000; // 10 seconds max wait for DOM elements
 const QUEUE_POLL_INTERVAL_MS = 3000; // Poll Whisparr queue
 const STASHDB_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Error handling utilities
+const ErrorHandler = {
+  /**
+   * Logs errors with consistent formatting
+   * @param {string} context - Context where error occurred
+   * @param {Error} error - The error object
+   * @param {string} userMessage - Optional user-friendly message
+   */
+  logError(context, error, userMessage = null) {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] ${context}:`, error);
+    if (userMessage) {
+      console.error(`User message: ${userMessage}`);
+    }
+  },
+
+  /**
+   * Creates a standardized error object
+   * @param {string} message - Error message
+   * @param {number} statusCode - HTTP status code if applicable
+   * @param {Object} details - Additional error details
+   * @returns {Error} Standardized error object
+   */
+  createError(message, statusCode = null, details = null) {
+    const error = new Error(message);
+    if (statusCode) error.statusCode = statusCode;
+    if (details) error.details = details;
+    return error;
+  },
+
+  /**
+   * Handles API errors with proper logging and user feedback
+   * @param {string} operation - The operation that failed
+   * @param {Error} error - The error object
+   * @param {Function} updateStatus - Function to update UI status
+   * @returns {void}
+   */
+  handleApiError(operation, error, updateStatus) {
+    this.logError(`API Error in ${operation}`, error);
+    
+    let userMessage = `Error during ${operation}`;
+    if (error.statusCode) {
+      userMessage += ` (HTTP ${error.statusCode})`;
+    }
+    
+    updateStatus({
+      button: `${icons.error}<span>Error</span>`,
+      className: 'btn-error',
+      extra: userMessage,
+    });
+  }
+};
+
+// Input validation utilities
+const Validator = {
+  /**
+   * Validates StashDB UUID format
+   * @param {string} stashId - The StashDB ID to validate
+   * @returns {boolean} True if valid UUID format
+   */
+  isValidStashId(stashId) {
+    return stashId && typeof stashId === 'string' && STASHDB_UUID_REGEX.test(stashId);
+  },
+
+  /**
+   * Validates API response structure
+   * @param {Object} response - API response to validate
+   * @param {string} expectedType - Expected response type
+   * @returns {boolean} True if response structure is valid
+   */
+  isValidApiResponse(response, expectedType = 'object') {
+    if (!response || typeof response !== expectedType) {
+      return false;
+    }
+    return true;
+  },
+
+  /**
+   * Validates Whisparr movie response
+   * @param {Object} movie - Movie object to validate
+   * @returns {boolean} True if movie structure is valid
+   */
+  isValidWhisparrMovie(movie) {
+    return movie && 
+           typeof movie === 'object' && 
+           typeof movie.id === 'number' && 
+           typeof movie.stashId === 'string' &&
+           typeof movie.monitored === 'boolean' &&
+           typeof movie.hasFile === 'boolean';
+  },
+
+  /**
+   * Validates Stash GraphQL response
+   * @param {Object} response - GraphQL response to validate
+   * @returns {boolean} True if response structure is valid
+   */
+  isValidStashResponse(response) {
+    return response && 
+           response.data && 
+           response.data.findScenes && 
+           Array.isArray(response.data.findScenes.scenes);
+  },
+
+  /**
+   * Validates queue item response
+   * @param {Object} item - Queue item to validate
+   * @returns {boolean} True if queue item structure is valid
+   */
+  isValidQueueItem(item) {
+    return item && 
+           typeof item === 'object' && 
+           typeof item.movieId === 'number';
+  },
+
+  /**
+   * Validates URL format
+   * @param {string} url - URL to validate
+   * @returns {boolean} True if valid URL format
+   */
+  isValidUrl(url) {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
 // Get current configuration
 const config = getConfig();
 const whisparrBaseUrl = config.whisparrBaseUrl;
@@ -263,9 +392,24 @@ body {
    * @returns {string} Escaped text
    */
   function escapeHtml(text) {
+    if (typeof text !== 'string') {
+      return '';
+    }
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  /**
+   * Safely sets innerHTML with XSS protection
+   * @param {HTMLElement} element - Element to update
+   * @param {string} content - Content to set (will be escaped)
+   * @returns {void}
+   */
+  function safeSetInnerHTML(element, content) {
+    if (element && typeof content === 'string') {
+      element.innerHTML = escapeHtml(content);
+    }
   }
 
   /**
@@ -526,8 +670,8 @@ body {
             const stashId = location.pathname.split('/')[2];
             
             // Validate stashId (StashDB uses UUID format)
-            if (!stashId || !STASHDB_UUID_REGEX.test(stashId)) {
-              console.error('Invalid stashId format:', stashId);
+            if (!Validator.isValidStashId(stashId)) {
+              ErrorHandler.logError('Scene ID validation', new Error('Invalid stashId format'), stashId);
               updateStatus({
                 button: `${icons.error}<span>Error</span>`,
                 className: 'btn-error',
@@ -538,7 +682,7 @@ body {
             
             await checkIfAvailable(stashId, updateStatus);
           } catch (error) {
-            console.error('Error adding button to scene page:', error);
+            ErrorHandler.logError('Button addition to scene page', error);
           }
         }
       }
@@ -548,36 +692,153 @@ body {
   const observerConfig = { subtree: true, childList: true };
   observer.observe(document, observerConfig);
 
+  // Cleanup mechanisms
+  const CleanupManager = {
+    /**
+     * Performs all necessary cleanup operations
+     * @returns {void}
+     */
+    cleanup() {
+      // Stop all queue polling
+      QueuePollingManager.stopAllPolling();
+      
+      // Disconnect mutation observer
+      observer.disconnect();
+      
+      // Clear any remaining timeouts/intervals
+      this.clearAllTimeouts();
+    },
+
+    /**
+     * Clears all active timeouts and intervals
+     * @returns {void}
+     */
+    clearAllTimeouts() {
+      // Clear any remaining setTimeout/setInterval calls
+      const highestTimeoutId = setTimeout(() => {}, 0);
+      for (let i = 0; i < highestTimeoutId; i++) {
+        clearTimeout(i);
+        clearInterval(i);
+      }
+    }
+  };
+
   // Cleanup observer when page unloads
   window.addEventListener('beforeunload', () => {
-    observer.disconnect();
+    CleanupManager.cleanup();
   });
 
-  // Track active queue pollers per movie to avoid duplicates
-  const activeQueuePollers = new Map(); // movieId -> intervalId
+  // Also cleanup on page visibility change (when tab becomes hidden)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Optionally reduce polling frequency when tab is hidden
+      // For now, we keep normal polling but could implement this optimization
+    }
+  });
 
-  // Previously used to show size/ETA in progress. Kept minimal until needed again.
+  // Queue polling management with proper cleanup
+  const QueuePollingManager = {
+    activePollers: new Map(), // movieId -> { intervalId, updateStatus, startTime }
+    maxPollingDuration: 30 * 60 * 1000, // 30 minutes max polling
 
-  /**
-   * Starts polling Whisparr queue for a movie and updates the button extra with progress
-   * @param {number} movieId
-   * @param {Function} updateStatus
-   */
-  function startQueueProgressPolling(movieId, updateStatus) {
-    if (activeQueuePollers.has(movieId)) return; // already polling
+    /**
+     * Starts polling Whisparr queue for a movie
+     * @param {number} movieId - The movie ID to poll
+     * @param {Function} updateStatus - Function to update button status
+     * @returns {void}
+     */
+    startPolling(movieId, updateStatus) {
+      if (this.activePollers.has(movieId)) {
+        return; // Already polling
+      }
 
+      const startTime = Date.now();
     const intervalId = setInterval(async () => {
       try {
+          await this.pollQueueItem(movieId, updateStatus, startTime);
+        } catch (error) {
+          ErrorHandler.logError('Queue polling', error);
+        }
+      }, QUEUE_POLL_INTERVAL_MS);
+
+      this.activePollers.set(movieId, { intervalId, updateStatus, startTime });
+    },
+
+    /**
+     * Polls a single queue item and handles completion/timeout
+     * @param {number} movieId - The movie ID being polled
+     * @param {Function} updateStatus - Function to update button status
+     * @param {number} startTime - When polling started
+     * @returns {Promise<void>}
+     */
+    async pollQueueItem(movieId, updateStatus, startTime) {
+      const pollerInfo = this.activePollers.get(movieId);
+      if (!pollerInfo) return;
+
+      // Check for timeout
+      if (Date.now() - startTime > this.maxPollingDuration) {
+        this.stopPolling(movieId);
+        updateStatus({
+          button: `${icons.error}<span>Timeout</span>`,
+          className: 'btn-error',
+          extra: 'Download polling timed out',
+        });
+        return;
+      }
+
         const queue = await fetchWhisparr('/queue/details?all=true');
         const item = queue.find((q) => q.movieId === movieId);
+      
         if (!item) {
-          // Not in queue anymore; stop polling and attempt to update final state
-          clearInterval(intervalId);
-          activeQueuePollers.delete(movieId);
-          try {
-            // Re-fetch the movie to determine if file is available now
+        // Not in queue anymore; stop polling and update final state
+        this.stopPolling(movieId);
+        await this.handleQueueCompletion(movieId, updateStatus);
+        return;
+      }
+
+      // Update progress
+      const progress = this.calculateProgress(item);
+      updateStatus({
+        button: `${icons.loading}<span>${progress.label}</span>`,
+        className: 'btn-loading',
+        extra: '',
+      });
+
+      // If complete, stop polling
+      if (progress.isComplete) {
+        this.stopPolling(movieId);
+      }
+    },
+
+    /**
+     * Calculates download progress from queue item
+     * @param {Object} item - Queue item
+     * @returns {Object} Progress information
+     */
+    calculateProgress(item) {
+      const total = item.size || item.sizeNz || 0;
+      const left = item.sizeLeft != null ? item.sizeLeft : (item.sizeLeft || 0);
+      const percent = total && left != null ? 
+        Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100))) : null;
+
+      return {
+        label: percent != null ? `${percent}%` : 'Downloading',
+        isComplete: left === 0,
+        percent: percent
+      };
+    },
+
+    /**
+     * Handles completion of queue item
+     * @param {number} movieId - The movie ID
+     * @param {Function} updateStatus - Function to update button status
+     * @returns {Promise<void>}
+     */
+    async handleQueueCompletion(movieId, updateStatus) {
+      try {
             const movies = await fetchWhisparr('/movie');
             const movie = movies.find((m) => m.id === movieId);
+        
             if (movie && movie.hasFile) {
               const localStashSceneId = await getLocalStashSceneId(movie);
               if (localStashSceneId) {
@@ -591,57 +852,325 @@ body {
                     if (newWindow) newWindow.focus();
                   },
                 });
-              } else {
-                updateStatus({
-                  button: `${icons.monitor}<span>Monitored</span>`,
-                  className: 'btn-monitor',
-                  extra: '',
-                });
-              }
-            } else {
+            return;
+          }
+        }
+        
               updateStatus({
                 button: `${icons.monitor}<span>Monitored</span>`,
                 className: 'btn-monitor',
                 extra: '',
               });
-            }
-          } catch (_) {
-            // On error, fall back to monitored state
+      } catch (error) {
+        ErrorHandler.logError('Queue completion handling', error);
             updateStatus({
               button: `${icons.monitor}<span>Monitored</span>`,
               className: 'btn-monitor',
               extra: '',
             });
           }
-          return;
-        }
+    },
 
-        const total = item.size || item.sizeNz || 0;
-        const left = item.sizeleft != null ? item.sizeleft : (item.sizeLeft || 0);
-        const done = total && left != null ? (total - left) : null;
-        const percent = total && left != null ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100))) : null;
-
-        const percentLabel = percent != null ? `${percent}%` : 'Downloading';
-
-        updateStatus({
-          button: `${icons.loading}<span>${percentLabel}</span>`,
-          className: 'btn-loading',
-          extra: '',
-        });
-
-        // If complete (left is 0), stop polling
-        if (left === 0) {
-          clearInterval(intervalId);
-          activeQueuePollers.delete(movieId);
-        }
-      } catch (e) {
-        // Keep polling; transient errors are expected
-        // No console spam here to avoid noise
+    /**
+     * Stops polling for a specific movie
+     * @param {number} movieId - The movie ID
+     * @returns {void}
+     */
+    stopPolling(movieId) {
+      const pollerInfo = this.activePollers.get(movieId);
+      if (pollerInfo) {
+        clearInterval(pollerInfo.intervalId);
+        this.activePollers.delete(movieId);
       }
-    }, QUEUE_POLL_INTERVAL_MS);
+    },
 
-    activeQueuePollers.set(movieId, intervalId);
+    /**
+     * Stops all active polling
+     * @returns {void}
+     */
+    stopAllPolling() {
+      for (const [movieId, pollerInfo] of this.activePollers) {
+        clearInterval(pollerInfo.intervalId);
+      }
+      this.activePollers.clear();
+    }
+  };
+
+  /**
+   * Starts polling Whisparr queue for a movie and updates the button extra with progress
+   * @param {number} movieId - The movie ID to poll
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {void}
+   */
+  function startQueueProgressPolling(movieId, updateStatus) {
+    QueuePollingManager.startPolling(movieId, updateStatus);
   }
+
+  /**
+   * Checks if a scene is available in Stash
+   * @param {string} stashId - The StashDB scene ID
+   * @returns {Promise<string|null>} Local Stash scene ID if found, null otherwise
+   */
+  async function checkStashAvailability(stashId) {
+    try {
+      const localStashSceneId = await getLocalStashSceneIdByStashId(stashId);
+      return localStashSceneId;
+    } catch (error) {
+      ErrorHandler.logError('Stash availability check', error);
+      return null;
+    }
+  }
+
+  /**
+   * Checks if a scene exists in Whisparr and returns its status
+   * @param {string} stashId - The StashDB scene ID
+   * @returns {Promise<Object|null>} Whisparr scene object or null if not found
+   */
+  async function checkWhisparrStatus(stashId) {
+    try {
+      const existingScene = await fetchSceneWithQueueStatus(stashId);
+      return existingScene;
+    } catch (error) {
+      ErrorHandler.logError('Whisparr status check', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handles the download flow for a scene
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {Promise<void>}
+   */
+  async function handleDownloadFlow(whisparrScene, updateStatus) {
+    if (!whisparrScene) {
+      return;
+    }
+
+    if (whisparrScene.hasFile) {
+      await handleSceneWithFile(whisparrScene, updateStatus);
+      return;
+    }
+
+    if (whisparrScene.queueStatus) {
+      await handleSceneInQueue(whisparrScene, updateStatus);
+      return;
+    }
+
+    if (whisparrScene.monitored) {
+      await handleMonitoredScene(whisparrScene, updateStatus);
+      return;
+    }
+
+    await handleUnmonitoredScene(whisparrScene, updateStatus);
+  }
+
+  /**
+   * Handles a scene that has a file available
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {Promise<void>}
+   */
+  async function handleSceneWithFile(whisparrScene, updateStatus) {
+    try {
+      const localStashSceneId = await getLocalStashSceneId(whisparrScene);
+      const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
+      updateStatus({
+        button: `${icons.play}<span>Play</span>`,
+        className: 'btn-play',
+        extra: '',
+        onClick: () => {
+          openInNewTab(stashUrl);
+        },
+      });
+    } catch (error) {
+      ErrorHandler.handleApiError('getting Stash scene ID', error, updateStatus);
+    }
+  }
+
+  /**
+   * Handles a scene that is currently in the download queue
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {Promise<void>}
+   */
+  async function handleSceneInQueue(whisparrScene, updateStatus) {
+    updateStatus({
+      button: `${icons.loading}<span>Downloading</span>`,
+      className: 'btn-loading',
+      extra: '',
+    });
+    if (whisparrScene.id) {
+      startQueueProgressPolling(whisparrScene.id, updateStatus);
+    }
+  }
+
+  /**
+   * Handles a monitored scene that may or may not be in queue
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {Promise<void>}
+   */
+  async function handleMonitoredScene(whisparrScene, updateStatus) {
+    try {
+      const queue = await fetchWhisparr('/queue/details?all=true');
+      const qItem = queue.find((q) => q.movieId === whisparrScene.id);
+      if (qItem) {
+        await handleSceneInQueue(whisparrScene, updateStatus);
+        return;
+      }
+    } catch (error) {
+      ErrorHandler.logError('Queue check for monitored scene', error);
+    }
+    
+    updateStatusToMonitored(whisparrScene, updateStatus);
+  }
+
+  /**
+   * Handles an unmonitored scene by checking download availability
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {Promise<void>}
+   */
+  async function handleUnmonitoredScene(whisparrScene, updateStatus) {
+          updateStatus({
+      button: `${icons.loading}<span>Checking download availability...</span>`,
+                className: 'btn-loading',
+                extra: '',
+              });
+
+    try {
+      const fileDownloadAvailability = await getFileDownloadAvailability(whisparrScene);
+      await handleDownloadAvailability(whisparrScene, fileDownloadAvailability, updateStatus);
+    } catch (error) {
+      ErrorHandler.handleApiError('checking download availability', error, updateStatus);
+    }
+  }
+
+  /**
+   * Handles different download availability states
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {string} availability - Download availability status
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {Promise<void>}
+   */
+  async function handleDownloadAvailability(whisparrScene, availability, updateStatus) {
+    switch (availability) {
+      case 'available for download':
+                updateStatus({
+          button: `${icons.download}<span>Download</span>`,
+          className: 'btn-download',
+                  extra: '',
+          onClick: async () => {
+            await initiateDownload(whisparrScene, updateStatus);
+          },
+        });
+        break;
+      case 'already downloading':
+        await handleSceneInQueue(whisparrScene, updateStatus);
+        break;
+      case 'not available for download':
+        updateStatusToUnmonitored(whisparrScene, updateStatus);
+        break;
+      default:
+                updateStatus({
+          button: `${icons.error}<span>Unknown</span>`,
+                  className: 'btn-error',
+          extra: 'Unknown file availability',
+        });
+    }
+  }
+
+  /**
+   * Initiates download for a scene
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {Promise<void>}
+   */
+  async function initiateDownload(whisparrScene, updateStatus) {
+        updateStatus({
+      button: `${icons.loading}<span>Downloading</span>`,
+              className: 'btn-loading',
+              extra: '',
+      onClick: () => {},
+    });
+    
+    try {
+      await downloadVideo(whisparrScene);
+                updateStatus({
+        button: `${icons.loading}<span>Downloading</span>`,
+        className: 'btn-loading',
+                  extra: '',
+      });
+      if (whisparrScene.id) {
+        startQueueProgressPolling(whisparrScene.id, updateStatus);
+              }
+            } catch (error) {
+      ErrorHandler.handleApiError('initiating download', error, updateStatus);
+    }
+    }
+
+    /**
+     * Updates button to show scene is currently monitored
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {void}
+     */
+  function updateStatusToMonitored(whisparrScene, updateStatus) {
+      updateStatus({
+        button: `${icons.monitor}<span>Monitored</span>`,
+        className: 'btn-monitor',
+        extra: '',
+        onClick: async () => {
+          if (!whisparrScene || !whisparrScene.id) {
+          ErrorHandler.logError('Monitoring toggle', new Error('Scene not found'));
+            return;
+          }
+
+          try {
+            whisparrScene = await monitorScene(false, whisparrScene);
+          updateStatusToUnmonitored(whisparrScene, updateStatus);
+          } catch (error) {
+          ErrorHandler.handleApiError('disabling monitoring', error, updateStatus);
+          }
+        },
+      });
+    }
+
+    /**
+     * Updates button to show scene is currently unmonitored
+   * @param {Object} whisparrScene - The Whisparr scene object
+   * @param {Function} updateStatus - Function to update button status
+   * @returns {void}
+     */
+  function updateStatusToUnmonitored(whisparrScene, updateStatus) {
+      updateStatus({
+        button: `${icons.monitorOff}<span>Monitor</span>`,
+        className: 'btn-monitor',
+        extra: '',
+        onClick: async () => {
+          if (!whisparrScene || !whisparrScene.id) {
+            // Scene doesn't exist yet, add it as monitored
+            try {
+            whisparrScene = await ensureSceneAddedAsMonitored(whisparrScene.stashId);
+            updateStatusToMonitored(whisparrScene, updateStatus);
+              return;
+            } catch (error) {
+            ErrorHandler.handleApiError('adding scene as monitored', error, updateStatus);
+              return;
+            }
+          }
+
+          // Scene exists, enable monitoring
+          try {
+            whisparrScene = await monitorScene(true, whisparrScene);
+          updateStatusToMonitored(whisparrScene, updateStatus);
+          } catch (error) {
+          ErrorHandler.handleApiError('enabling monitoring', error, updateStatus);
+          }
+        },
+      });
+    }
 
   /**
    * Checks if a scene is available in Stash or Whisparr
@@ -650,8 +1179,6 @@ body {
    * @returns {Promise<void>}
    */
   async function checkIfAvailable(stashId, updateStatus) {
-    let whisparrScene;
-
     // First check if scene already exists in Stash
     updateStatus({
       button: `${icons.loading}<span>Checking Stash...</span>`,
@@ -659,7 +1186,7 @@ body {
       extra: '',
     });
 
-    const localStashSceneId = await getLocalStashSceneIdByStashId(stashId);
+    const localStashSceneId = await checkStashAvailability(stashId);
     if (localStashSceneId) {
       const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
       updateStatus({
@@ -673,7 +1200,7 @@ body {
       return;
     }
 
-    // If not in Stash, check if scene exists in Whisparr but is unmonitored and has no file (previously deleted)
+    // If not in Stash, check Whisparr status
     updateStatus({
       button: `${icons.loading}<span>Checking Whisparr...</span>`,
       className: 'btn-loading',
@@ -681,48 +1208,36 @@ body {
     });
 
     try {
-      let existingScene = await fetchSceneWithQueueStatus(stashId);
+      const existingScene = await checkWhisparrStatus(stashId);
 
-      // Check if scene exists, is unmonitored, and has no file (previously added and since deleted in stash)
-      if (existingScene && !existingScene.monitored && !existingScene.hasFile) {
-
-        // If not in queue, it was previously added but unmonitored
-        if (!existingScene.queueStatus) {
-          updateStatus({
-            button: `${icons.deleted}<span>Previously Added</span>`,
-            className: 'btn-monitor',
-            onClick: async () => {
-              updateStatus({
-                button: `${icons.loading}<span>Enabling monitoring...</span>`,
-                className: 'btn-loading',
-                extra: '',
-              });
-              try {
-                await monitorScene(true, existingScene);
-                updateStatus({
-                  button: `${icons.monitor}<span>Monitored</span>`,
-                  className: 'btn-monitor',
-                  extra: '',
-                });
-              } catch (error) {
-                console.error('Error enabling monitoring:', error);
-                updateStatus({
-                  button: `${icons.error}<span>Error</span>`,
-                  className: 'btn-error',
-                  extra: 'Failed to enable monitoring',
-                });
-              }
-            },
-          });
-          return;
-        }
+      // Handle previously added but unmonitored scenes
+      if (existingScene && !existingScene.monitored && !existingScene.hasFile && !existingScene.queueStatus) {
+        updateStatus({
+          button: `${icons.deleted}<span>Previously Added</span>`,
+          className: 'btn-monitor',
+          onClick: async () => {
+            updateStatus({
+              button: `${icons.loading}<span>Enabling monitoring...</span>`,
+              className: 'btn-loading',
+          extra: '',
+            });
+            try {
+              await monitorScene(true, existingScene);
+            updateStatus({
+                button: `${icons.monitor}<span>Monitored</span>`,
+                className: 'btn-monitor',
+          extra: '',
+            });
+            } catch (error) {
+              ErrorHandler.handleApiError('enabling monitoring', error, updateStatus);
+            }
+          },
+        });
+        return;
       }
 
-      // Only add scene if it already exists in Whisparr, otherwise show "Monitor" button
-      if (existingScene) {
-        whisparrScene = existingScene;
-      } else {
-        // Scene doesn't exist in Whisparr yet, show "Monitor" button to let user add it
+      // Handle scenes that don't exist in Whisparr yet
+      if (!existingScene) {
         updateStatus({
           button: `${icons.monitorOff}<span>Monitor</span>`,
           className: 'btn-monitor',
@@ -730,228 +1245,30 @@ body {
           onClick: async () => {
             updateStatus({
               button: `${icons.loading}<span>Adding to Whisparr...</span>`,
-              className: 'btn-loading',
-              extra: '',
-            });
+          className: 'btn-loading',
+          extra: '',
+        });
             try {
-              whisparrScene = await ensureSceneAddedAsMonitored(stashId);
+              const whisparrScene = await ensureSceneAddedAsMonitored(stashId);
               
-              // Check status after adding
               if (whisparrScene.hasFile) {
-                const localStashSceneId = await getLocalStashSceneId(whisparrScene);
-                const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
-                updateStatus({
-                  button: `${icons.play}<span>Play</span>`,
-                  className: 'btn-play',
-                  extra: '',
-                  onClick: () => {
-                    const newWindow = window.open(stashUrl, '_blank');
-                    if (newWindow) {
-                      newWindow.focus();
-                    } else {
-                      console.warn('Failed to open Stash scene. Check popup blocker.');
-                    }
-                  },
-                });
+                await handleSceneWithFile(whisparrScene, updateStatus);
               } else {
-                updateStatusToMonitored();
+                updateStatusToMonitored(whisparrScene, updateStatus);
               }
             } catch (error) {
-              console.error('Error adding scene to Whisparr:', error);
-              updateStatus({
-                button: `${icons.error}<span>Error</span>`,
-                className: 'btn-error',
-                extra: 'Failed to add scene to Whisparr',
-              });
+              ErrorHandler.handleApiError('adding scene to Whisparr', error, updateStatus);
             }
           },
         });
         return;
       }
+
+      // Handle existing scenes in Whisparr
+      await handleDownloadFlow(existingScene, updateStatus);
+
     } catch (error) {
-      console.error('Error checking scene in Whisparr:', error);
-      updateStatus({
-        button: `${icons.error}<span>Error</span>`,
-        className: 'btn-error',
-        extra: 'Error checking scene in Whisparr',
-      });
-      throw error;
-    }
-
-    // Now handle scenes that exist in Whisparr
-    if (!whisparrScene) {
-      return; // Should not happen, but safety check
-    }
-
-    /**
-     * Updates button to show scene is currently monitored
-     * Click action: Disables monitoring for the scene
-     */
-    function updateStatusToMonitored() {
-      updateStatus({
-        button: `${icons.monitor}<span>Monitored</span>`,
-        className: 'btn-monitor',
-        extra: '',
-        onClick: async () => {
-          // Disable monitoring
-          if (!whisparrScene || !whisparrScene.id) {
-            console.error('Cannot toggle monitoring: scene not found');
-            return;
-          }
-
-          try {
-            whisparrScene = await monitorScene(false, whisparrScene);
-            updateStatusToUnmonitored();
-          } catch (error) {
-            console.error('Error disabling monitoring:', error);
-          }
-        },
-      });
-    }
-
-    /**
-     * Updates button to show scene is currently unmonitored
-     * Click action: Enables monitoring for the scene
-     */
-    function updateStatusToUnmonitored() {
-      updateStatus({
-        button: `${icons.monitorOff}<span>Monitor</span>`,
-        className: 'btn-monitor',
-        extra: '',
-        onClick: async () => {
-          // Enable monitoring
-          if (!whisparrScene || !whisparrScene.id) {
-            // Scene doesn't exist yet, add it as monitored
-            try {
-              whisparrScene = await ensureSceneAddedAsMonitored(stashId);
-              updateStatusToMonitored();
-              return;
-            } catch (error) {
-              console.error('Error adding scene as monitored:', error);
-              return;
-            }
-          }
-
-          // Scene exists, enable monitoring
-          try {
-            whisparrScene = await monitorScene(true, whisparrScene);
-            updateStatusToMonitored();
-          } catch (error) {
-            console.error('Error enabling monitoring:', error);
-          }
-        },
-      });
-    }
-
-    if (whisparrScene.hasFile) {
-      const localStashSceneId = await getLocalStashSceneId(whisparrScene);
-      const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
-      updateStatus({
-        button: `${icons.play}<span>Play</span>`,
-        className: 'btn-play',
-        extra: '',
-        onClick: () => {
-          openInNewTab(stashUrl);
-        },
-      });
-      return;
-    } else if (whisparrScene.queueStatus) {
-      updateStatus({
-        button: `${icons.loading}<span>Downloading</span>`,
-        className: 'btn-loading',
-        extra: '',
-      });
-      if (whisparrScene.id) {
-        startQueueProgressPolling(whisparrScene.id, updateStatus);
-      }
-      return;
-    } else if (whisparrScene.monitored) {
-      // Double-check live queue even if queueStatus wasn't attached earlier
-      try {
-        const queue = await fetchWhisparr('/queue/details?all=true');
-        const qItem = queue.find((q) => q.movieId === whisparrScene.id);
-        if (qItem) {
-          updateStatus({
-            button: `${icons.loading}<span>Downloading</span>`,
-            className: 'btn-loading',
-            extra: '',
-          });
-          if (whisparrScene.id) {
-            startQueueProgressPolling(whisparrScene.id, updateStatus);
-          }
-          return;
-        }
-      } catch (e) {
-        // ignore errors and fall back to monitored state
-      }
-      updateStatusToMonitored();
-      return;
-    }
-
-    let fileDownloadAvailability;
-
-    updateStatus({
-      button: `${icons.loading}<span>Checking download availability...</span>`,
-      className: 'btn-loading',
-      extra: '',
-    });
-
-    try {
-      fileDownloadAvailability = await getFileDownloadAvailability(whisparrScene);
-    } catch (error) {
-      console.error('Error checking if scene available for download:', error);
-      updateStatus({
-        button: `${icons.error}<span>Error</span>`,
-        className: 'btn-error',
-        extra: 'Error checking download availability',
-      });
-      throw error;
-    }
-
-    switch (fileDownloadAvailability) {
-      case 'available for download':
-        updateStatus({
-          button: `${icons.download}<span>Download</span>`,
-          className: 'btn-download',
-          extra: '',
-          onClick: async () => {
-            updateStatus({
-              button: `${icons.loading}<span>Downloading</span>`,
-              className: 'btn-loading',
-          extra: '',
-              onClick: () => {},
-            });
-            await downloadVideo(whisparrScene);
-            updateStatus({
-              button: `${icons.loading}<span>Downloading</span>`,
-              className: 'btn-loading',
-          extra: '',
-            });
-            if (whisparrScene.id) {
-              startQueueProgressPolling(whisparrScene.id, updateStatus);
-            }
-          },
-        });
-        break;
-      case 'already downloading':
-        updateStatus({
-          button: `${icons.loading}<span>Downloading</span>`,
-          className: 'btn-loading',
-          extra: '',
-        });
-        if (whisparrScene.id) {
-          startQueueProgressPolling(whisparrScene.id, updateStatus);
-        }
-        break;
-      case 'not available for download':
-        updateStatusToUnmonitored();
-        break;
-      default:
-        updateStatus({
-          button: `${icons.error}<span>Unknown</span>`,
-          className: 'btn-error',
-          extra: 'Unknown file availability',
-        });
+      ErrorHandler.handleApiError('checking scene in Whisparr', error, updateStatus);
     }
   }
 
@@ -962,11 +1279,22 @@ body {
    */
   async function fetchSceneWithQueueStatus(stashId) {
     const scenes = await fetchWhisparr('/movie');
+    
+    if (!Validator.isValidApiResponse(scenes, 'object') || !Array.isArray(scenes)) {
+      ErrorHandler.logError('Invalid scenes response', new Error('Invalid API response format'));
+      return null;
+    }
+    
     const scene = scenes.find((s) => s.stashId === stashId);
     
     if (scene && !scene.hasFile) {
       const queue = await fetchWhisparr('/queue/details?all=true');
-      scene.queueStatus = queue.find((queueItem) => queueItem.movieId === scene.id);
+      
+      if (Validator.isValidApiResponse(queue, 'object') && Array.isArray(queue)) {
+        scene.queueStatus = queue.find((queueItem) => 
+          Validator.isValidQueueItem(queueItem) && queueItem.movieId === scene.id
+        );
+      }
     }
     
     return scene || null;
@@ -1000,7 +1328,7 @@ body {
         },
       });
     } catch (error) {
-      console.error('Error adding scene to Whisparr:', error);
+      ErrorHandler.logError('Adding scene to Whisparr', error);
       throw error;
     }
   }
@@ -1038,13 +1366,13 @@ body {
         try {
           await triggerMoviesSearch([newScene.id]);
         } catch (error) {
-          console.error('Failed to trigger MoviesSearch for new scene:', error);
+          ErrorHandler.logError('MoviesSearch trigger for new scene', error);
         }
       }, SEARCH_TRIGGER_DELAY_MS);
 
       return newScene;
     } catch (error) {
-      console.error('Error adding monitored scene to Whisparr:', error);
+      ErrorHandler.logError('Adding monitored scene to Whisparr', error);
       throw error;
     }
   }
@@ -1070,7 +1398,7 @@ body {
       });
       return response;
     } catch (error) {
-      console.error('Error triggering movies search:', error);
+      ErrorHandler.logError('Triggering movies search', error);
       throw error;
     }
   }
@@ -1102,7 +1430,7 @@ body {
         try {
           await triggerMoviesSearch([whisparrScene.id]);
         } catch (error) {
-          console.error('Failed to trigger MoviesSearch after enabling monitoring:', error);
+          ErrorHandler.logError('MoviesSearch after enabling monitoring', error);
           // Don't throw error here - monitoring was successful, search failure is not critical
         }
       }, SEARCH_TRIGGER_DELAY_MS);
@@ -1179,12 +1507,18 @@ body {
           }
         `,
       });
+      
+      if (!Validator.isValidStashResponse(stashRes)) {
+        ErrorHandler.logError('Invalid Stash response (URL search)', new Error('Invalid GraphQL response format'));
+        return null;
+      }
+      
       const scene = stashRes.data.findScenes.scenes[0];
-      if (scene) {
+      if (scene && scene.id) {
         return scene.id;
       }
     } catch (error) {
-      console.warn('Stash search by URL failed:', error);
+      ErrorHandler.logError('Stash search by URL', error);
     }
 
     // Second try: Search by stash_id field directly
@@ -1209,12 +1543,18 @@ body {
           }
         `,
       });
+      
+      if (!Validator.isValidStashResponse(stashRes)) {
+        ErrorHandler.logError('Invalid Stash response (stash_id search)', new Error('Invalid GraphQL response format'));
+        return null;
+      }
+      
       const scene = stashRes.data.findScenes.scenes[0];
-      if (scene) {
+      if (scene && scene.id) {
         return scene.id;
       }
     } catch (error) {
-      console.warn('Stash search by stash_id field failed:', error);
+      ErrorHandler.logError('Stash search by stash_id field', error);
     }
 
     return null;
@@ -1249,7 +1589,7 @@ body {
       });
       return stashRes.data.findScenes.scenes[0]?.id;
     } catch (error) {
-      console.error('Error getting local Stash scene ID:', error);
+      ErrorHandler.logError('Getting local Stash scene ID', error);
       return undefined;
     }
   }
