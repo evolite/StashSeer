@@ -625,6 +625,31 @@ body {
   }
 
   /**
+   * After enabling monitoring, wait ~5s then check if item entered the queue; if so, show downloading and start polling
+   * @param {number} movieId
+   * @param {Function} updateStatus
+   */
+  function scheduleQueueCheck(movieId, updateStatus) {
+    if (!movieId) return;
+    setTimeout(async () => {
+      try {
+        const queue = await fetchWhisparr('/queue/details?all=true');
+        const qItem = queue.find((q) => q.movieId === movieId);
+        if (qItem) {
+          updateStatus({
+            button: `${icons.loading}<span>Downloading</span>`,
+            className: 'btn-loading',
+            extra: '',
+          });
+          startQueueProgressPolling(movieId, updateStatus);
+        }
+      } catch (_) {
+        // ignore transient errors
+      }
+    }, 5000);
+  }
+
+  /**
    * Checks if a scene is available in Stash or Whisparr
    * @param {string} stashId - The StashDB scene ID
    * @param {Function} updateStatus - Function to update button status
@@ -811,6 +836,7 @@ body {
             try {
               whisparrScene = await ensureSceneAddedAsMonitored(stashId);
               updateStatusToMonitored();
+              scheduleQueueCheck(whisparrScene.id, updateStatus);
               return;
             } catch (error) {
               console.error('Error adding scene as monitored:', error);
@@ -822,6 +848,7 @@ body {
           try {
             whisparrScene = await monitorScene(true, whisparrScene);
             updateStatusToMonitored();
+            scheduleQueueCheck(whisparrScene.id, updateStatus);
           } catch (error) {
             console.error('Error enabling monitoring:', error);
           }
@@ -909,17 +936,19 @@ body {
             updateStatus({
               button: `${icons.loading}<span>Downloading</span>`,
               className: 'btn-loading',
-              extra: 'Searching Whisparr for releases...',
+          extra: '',
               onClick: () => {},
             });
             await downloadVideo(whisparrScene);
             updateStatus({
               button: `${icons.loading}<span>Downloading</span>`,
               className: 'btn-loading',
-              extra: '',
+          extra: '',
             });
             if (whisparrScene.id) {
               startQueueProgressPolling(whisparrScene.id, updateStatus);
+          // Also schedule a follow-up queue check after 5s in case the grab happens slightly delayed
+          scheduleQueueCheck(whisparrScene.id, updateStatus);
             }
           },
         });
