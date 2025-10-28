@@ -271,6 +271,9 @@ body {
   /**
    * Creates button controls for Whisparr integration
    * @returns {Object} Object containing downloadElm and updateStatus function
+   * @note The updateStatus function accepts an 'extra' property that can contain HTML.
+   *       This HTML must only be constructed from constant templates and safe local variables,
+   *       never from untrusted remote data to prevent XSS vulnerabilities.
    */
   function createButton() {
     const containerElm = document.createElement('div');
@@ -287,24 +290,14 @@ body {
     whisparrButtonElm.innerHTML = `${icons.whisparr}<span>Whisparr</span>`;
     whisparrButtonElm.classList.add('btn-whisparr');
     whisparrButtonElm.addEventListener('click', () => {
-      const newWindow = window.open(whisparrBaseUrl, '_blank');
-      if (newWindow) {
-        newWindow.focus();
-      } else {
-        console.warn('Failed to open Whisparr in new window. Check popup blocker.');
-      }
+      openInNewTab(whisparrBaseUrl);
     });
 
     // Add Stash button
     stashButtonElm.innerHTML = `${icons.stash}<span>Stash</span>`;
     stashButtonElm.classList.add('btn-stash');
     stashButtonElm.addEventListener('click', () => {
-      const newWindow = window.open(localStashRootUrl, '_blank');
-      if (newWindow) {
-        newWindow.focus();
-      } else {
-        console.warn('Failed to open Stash in new window. Check popup blocker.');
-      }
+      openInNewTab(localStashRootUrl);
     });
 
     // Add Settings button
@@ -627,7 +620,6 @@ body {
         const left = item.sizeleft != null ? item.sizeleft : (item.sizeLeft || 0);
         const done = total && left != null ? (total - left) : null;
         const percent = total && left != null ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100))) : null;
-        const timeleft = item.timeleftSeconds != null ? item.timeleftSeconds : (item.timeleft || null);
 
         const percentLabel = percent != null ? `${percent}%` : 'Downloading';
 
@@ -675,12 +667,7 @@ body {
         className: 'btn-play',
         extra: '',
         onClick: () => {
-          const newWindow = window.open(stashUrl, '_blank');
-          if (newWindow) {
-            newWindow.focus();
-          } else {
-            console.warn('Failed to open Stash scene. Check popup blocker.');
-          }
+          openInNewTab(stashUrl);
         },
       });
       return;
@@ -864,12 +851,7 @@ body {
         className: 'btn-play',
         extra: '',
         onClick: () => {
-          const newWindow = window.open(stashUrl, '_blank');
-          if (newWindow) {
-            newWindow.focus();
-          } else {
-            console.warn('Failed to open Stash scene. Check popup blocker.');
-          }
+          openInNewTab(stashUrl);
         },
       });
       return;
@@ -1139,15 +1121,17 @@ body {
 
     if (releases.some((release) => release.approved)) {
       return 'available for download';
-    } if (
-      releases.some((release) =>
-        release.rejections.some((rejection) =>
-          rejection.startsWith('Release in queue already')
-        )
+    }
+    
+    if (releases.some((release) => 
+      Array.isArray(release.rejections) &&
+      release.rejections.some((rejection) => 
+        typeof rejection === 'string' && rejection.startsWith('Release in queue already')
       )
-    ) {
+    )) {
       return 'already downloading';
     }
+    
     return 'not available for download';
   }
 
@@ -1276,18 +1260,39 @@ body {
     config.whisparrNeedsCloudflare
   );
 
+  const fetchLocalStash = factoryFetchApi(
+    localStashGraphQlEndpoint,
+    localStashAuthHeaders,
+    config.stashNeedsCloudflare
+  );
+
   /**
    * Executes a GraphQL query against the local Stash instance
    * @param {Object} request - GraphQL request object with query and variables
    * @returns {Promise<Object>} GraphQL response
    */
   async function localStashGraphQl(request) {
-    const fetchLocalStash = factoryFetchApi(
-      localStashGraphQlEndpoint, 
-      localStashAuthHeaders,
-      config.stashNeedsCloudflare
-    );
     return fetchLocalStash('', { body: request });
+  }
+
+  /**
+   * Opens a URL in a new tab with security protections
+   * @param {string} url - URL to open
+   * @returns {Window|null} The opened window or null if blocked
+   */
+  function openInNewTab(url) {
+    const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (newWindow) {
+      try {
+        newWindow.opener = null;
+      } catch (_) {
+        // Ignore if opener cannot be set
+      }
+      newWindow.focus();
+    } else {
+      console.warn('Failed to open URL in new window. Check popup blocker.');
+    }
+    return newWindow;
   }
 
   /**
@@ -1295,45 +1300,49 @@ body {
    * @param {string} baseUrl - Base URL for API requests
    * @param {Object} defaultHeaders - Default headers to include in requests
    * @param {boolean} addCloudflareHeaders - Whether to add Cloudflare Zero Trust headers
+   * @param {number} defaultTimeoutMs - Default timeout in milliseconds
    * @returns {Function} Fetch wrapper function
    */
-  function factoryFetchApi(baseUrl, defaultHeaders, addCloudflareHeaders = false) {
+  function factoryFetchApi(baseUrl, defaultHeaders, addCloudflareHeaders = false, defaultTimeoutMs = 15000) {
     return async (subPath, options = {}) => {
-      // Build headers with proper priority order
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? defaultTimeoutMs);
+
+      const hasBody = options.body !== undefined && options.body !== null;
+      const method = options.method || (hasBody ? 'POST' : 'GET');
+
       const headers = {
         ...defaultHeaders,
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options?.headers || {}),
+        ...(hasBody && typeof options.body === 'object' ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {}),
+        ...(addCloudflareHeaders && cfAccessClientId ? { 'CF-Access-Client-Id': cfAccessClientId } : {}),
+        ...(addCloudflareHeaders && cfAccessClientSecret ? { 'CF-Access-Client-Secret': cfAccessClientSecret } : {}),
       };
-      
-      // Add Cloudflare Zero Trust headers only if requested
-      if (addCloudflareHeaders) {
-        if (cfAccessClientId) {
-          headers['CF-Access-Client-Id'] = cfAccessClientId;
-        }
-        if (cfAccessClientSecret) {
-          headers['CF-Access-Client-Secret'] = cfAccessClientSecret;
-        }
-      }
-      
-      const res = await fetch(new URL(subPath.replace(/^\/*/g, ''), baseUrl), {
-        method: options.body ? 'POST' : options.method || 'GET',
+
+      const url = new URL(String(subPath || '').replace(/^\/*/g, ''), baseUrl);
+      const body = hasBody && typeof options.body === 'object' ? JSON.stringify(options.body) : options.body;
+
+      const res = await fetch(url, {
+        method,
         mode: 'cors',
         credentials: 'omit',
         ...options,
-        ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+        method, // ensure method is not overridden by spread
         headers,
-      });
+        body,
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
+
       if (!res.ok) {
-        let body;
+        let parsed;
         try {
-          body = await res.json();
-        } catch (error) {
-          console.warn('Failed to parse error response body:', error);
+          parsed = await res.json();
+        } catch (_) {
+          // Ignore JSON parse errors for error responses
         }
         const error = new Error(`HTTP ${res.status}: ${res.statusText}`);
         error.statusCode = res.status;
-        error.resBody = body;
+        error.resBody = parsed;
         throw error;
       }
       return res.json();
