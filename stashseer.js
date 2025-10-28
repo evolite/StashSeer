@@ -16,10 +16,7 @@
 // First time setup: Click the Settings button to configure your API keys
 // Values persist across browser sessions
 
-/**
- * Retrieves the current configuration from Tampermonkey storage
- * @returns {Object} Configuration object with all settings
- */
+/** Get configuration from Tampermonkey storage. */
 function getConfig() {
   return {
     whisparrBaseUrl: GM_getValue('whisparrBaseUrl', 'http://localhost:6969'),
@@ -34,10 +31,7 @@ function getConfig() {
   };
 }
 
-/**
- * Saves configuration to Tampermonkey storage
- * @param {Object} config - Configuration object to save
- */
+/** Save configuration to Tampermonkey storage. */
 function setConfig(config) {
   GM_setValue('whisparrBaseUrl', config.whisparrBaseUrl);
   GM_setValue('whisparrApiKey', config.whisparrApiKey);
@@ -60,12 +54,7 @@ const STASHDB_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 
 // Error handling utilities
 const ErrorHandler = {
-  /**
-   * Logs errors with consistent formatting
-   * @param {string} context - Context where error occurred
-   * @param {Error} error - The error object
-   * @param {string} userMessage - Optional user-friendly message
-   */
+  /** Log errors with consistent formatting. */
   logError(context, error, userMessage = null) {
     const timestamp = new Date().toISOString();
     console.error(`[${timestamp}] ${context}:`, error);
@@ -74,27 +63,7 @@ const ErrorHandler = {
     }
   },
 
-  /**
-   * Creates a standardized error object
-   * @param {string} message - Error message
-   * @param {number} statusCode - HTTP status code if applicable
-   * @param {Object} details - Additional error details
-   * @returns {Error} Standardized error object
-   */
-  createError(message, statusCode = null, details = null) {
-    const error = new Error(message);
-    if (statusCode) error.statusCode = statusCode;
-    if (details) error.details = details;
-    return error;
-  },
-
-  /**
-   * Handles API errors with proper logging and user feedback
-   * @param {string} operation - The operation that failed
-   * @param {Error} error - The error object
-   * @param {Function} updateStatus - Function to update UI status
-   * @returns {void}
-   */
+  /** Handle API errors and update UI status. */
   handleApiError(operation, error, updateStatus) {
     this.logError(`API Error in ${operation}`, error);
     
@@ -113,47 +82,12 @@ const ErrorHandler = {
 
 // Input validation utilities
 const Validator = {
-  /**
-   * Validates StashDB UUID format
-   * @param {string} stashId - The StashDB ID to validate
-   * @returns {boolean} True if valid UUID format
-   */
+  /** Validate StashDB UUID format. */
   isValidStashId(stashId) {
     return stashId && typeof stashId === 'string' && STASHDB_UUID_REGEX.test(stashId);
   },
 
-  /**
-   * Validates API response structure
-   * @param {Object} response - API response to validate
-   * @param {string} expectedType - Expected response type
-   * @returns {boolean} True if response structure is valid
-   */
-  isValidApiResponse(response, expectedType = 'object') {
-    if (!response || typeof response !== expectedType) {
-      return false;
-    }
-    return true;
-  },
-
-  /**
-   * Validates Whisparr movie response
-   * @param {Object} movie - Movie object to validate
-   * @returns {boolean} True if movie structure is valid
-   */
-  isValidWhisparrMovie(movie) {
-    return movie && 
-           typeof movie === 'object' && 
-           typeof movie.id === 'number' && 
-           typeof movie.stashId === 'string' &&
-           typeof movie.monitored === 'boolean' &&
-           typeof movie.hasFile === 'boolean';
-  },
-
-  /**
-   * Validates Stash GraphQL response
-   * @param {Object} response - GraphQL response to validate
-   * @returns {boolean} True if response structure is valid
-   */
+  /** Validate Stash GraphQL response (findScenes). */
   isValidStashResponse(response) {
     return response && 
            response.data && 
@@ -161,30 +95,12 @@ const Validator = {
            Array.isArray(response.data.findScenes.scenes);
   },
 
-  /**
-   * Validates queue item response
-   * @param {Object} item - Queue item to validate
-   * @returns {boolean} True if queue item structure is valid
-   */
+  /** Validate Whisparr queue item. */
   isValidQueueItem(item) {
     return item && 
            typeof item === 'object' && 
            typeof item.movieId === 'number';
   },
-
-  /**
-   * Validates URL format
-   * @param {string} url - URL to validate
-   * @returns {boolean} True if valid URL format
-   */
-  isValidUrl(url) {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 };
 
 // Get current configuration
@@ -380,17 +296,12 @@ body {
     monitorOff: `<svg viewBox="0 0 16 16"><path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7.028 7.028 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z"/><path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829l.822.822zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z"/><path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7.029 7.029 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12-.708.708z"/></svg>`,
     deleted: `<svg viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M11.854 4.146a.5.5 0 0 0-.708 0l-3 3a.5.5 0 0 0 0 .708l3 3a.5.5 0 0 0 .708-.708l-2.146-2.146 2.146-2.146a.5.5 0 0 0 0-.708zm-4.708 0a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L7.707 7.854 4.854 5a.5.5 0 0 1 0-.708z"/></svg>`,
     error: `<svg viewBox="0 0 16 16"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`,
-    check: `<svg viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>`,
     whisparr: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/></svg>`,
     stash: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm8 1a1 1 0 1 0-2 0 1 1 0 0 0 2 0zm2 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0z"/></svg>`,
     settings: `<svg viewBox="0 0 16 16"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319z"/></svg>`,
   };
 
-  /**
-   * Escapes HTML to prevent XSS attacks
-   * @param {string} text - Text to escape
-   * @returns {string} Escaped text
-   */
+  /** Escape HTML to prevent XSS. */
   function escapeHtml(text) {
     if (typeof text !== 'string') {
       return '';
@@ -400,25 +311,9 @@ body {
     return div.innerHTML;
   }
 
-  /**
-   * Safely sets innerHTML with XSS protection
-   * @param {HTMLElement} element - Element to update
-   * @param {string} content - Content to set (will be escaped)
-   * @returns {void}
-   */
-  function safeSetInnerHTML(element, content) {
-    if (element && typeof content === 'string') {
-      element.innerHTML = escapeHtml(content);
-    }
-  }
+  
 
-  /**
-   * Creates button controls for Whisparr integration
-   * @returns {Object} Object containing downloadElm and updateStatus function
-   * @note The updateStatus function accepts an 'extra' property that can contain HTML.
-   *       This HTML must only be constructed from constant templates and safe local variables,
-   *       never from untrusted remote data to prevent XSS vulnerabilities.
-   */
+  /** Create Whisparr/Stash control buttons and status updater. */
   function createButton() {
     const containerElm = document.createElement('div');
     const dlButtonElm = document.createElement('button');
@@ -453,6 +348,35 @@ body {
 
     let lastOnClickValue;
 
+    function setControlledHtml(element, html) {
+      if (typeof html !== 'string') {
+        element.textContent = '';
+        return;
+      }
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+      // allow only <a> tags; strip others
+      const allNodes = Array.from(temp.querySelectorAll('*'));
+      for (const node of allNodes) {
+        if (node.tagName.toLowerCase() !== 'a') {
+          const text = node.textContent || '';
+          node.replaceWith(document.createTextNode(text));
+        }
+      }
+      const links = temp.querySelectorAll('a');
+      for (const a of links) {
+        const href = a.getAttribute('href') || '';
+        if (!/^https?:\/\//i.test(href)) {
+          const text = a.textContent || '';
+          a.replaceWith(document.createTextNode(text));
+        } else {
+          a.rel = 'noopener noreferrer';
+          a.target = '_blank';
+        }
+      }
+      element.innerHTML = temp.innerHTML;
+    }
+
     function updateStatus(newStatus) {
       if (typeof newStatus === 'string') {
         statusElm.innerHTML = escapeHtml(newStatus);
@@ -464,8 +388,8 @@ body {
           dlButtonElm.className = newStatus.className;
         }
         if (typeof newStatus.extra !== 'undefined') {
-          // Allow HTML for links (controlled content only, not user input)
-          statusElm.innerHTML = newStatus.extra;
+          // Controlled HTML with allowlist sanitizer
+          setControlledHtml(statusElm, newStatus.extra);
         }
         if (typeof newStatus.onClick !== 'undefined') {
           if (lastOnClickValue) {
@@ -486,9 +410,7 @@ body {
     return { downloadElm: containerElm, updateStatus };
   }
 
-  /**
-   * Shows the settings dialog for configuring API keys and URLs
-   */
+  /** Show the settings dialog for API keys and URLs. */
   function showSettingsDialog() {
     const currentConfig = getConfig();
 
@@ -636,12 +558,7 @@ body {
     });
   }
 
-  /**
-   * Adds download button to the scene page
-   * @param {HTMLElement} downloadElm - The download button element to add
-   * @returns {Promise<void>}
-   * @throws {Error} If parent element is not found within timeout
-   */
+  /** Add the download button into the scene page tabs. */
   async function addButtonToScenePage(downloadElm) {
     const startTime = Date.now();
     let parentElement;
@@ -665,6 +582,13 @@ body {
       for (const node of mutation.addedNodes) {
         if (node.nodeType === 1 && node.classList.contains('scene-info')) {
           try {
+            // Remove any existing controls to avoid duplicates and stale state
+            const tabs = document.querySelector('.NarrowPage > .nav-tabs');
+            if (tabs) {
+              const existing = tabs.querySelector('.downloadInWhisparr');
+              if (existing) existing.remove();
+            }
+
             const { downloadElm, updateStatus } = createButton();
             await addButtonToScenePage(downloadElm);
             const stashId = location.pathname.split('/')[2];
@@ -690,7 +614,7 @@ body {
   });
 
   const observerConfig = { subtree: true, childList: true };
-  observer.observe(document, observerConfig);
+  observer.observe(document.body, observerConfig);
 
   // Cleanup mechanisms
   const CleanupManager = {
@@ -704,23 +628,7 @@ body {
       
       // Disconnect mutation observer
       observer.disconnect();
-      
-      // Clear any remaining timeouts/intervals
-      this.clearAllTimeouts();
     },
-
-    /**
-     * Clears all active timeouts and intervals
-     * @returns {void}
-     */
-    clearAllTimeouts() {
-      // Clear any remaining setTimeout/setInterval calls
-      const highestTimeoutId = setTimeout(() => {}, 0);
-      for (let i = 0; i < highestTimeoutId; i++) {
-        clearTimeout(i);
-        clearInterval(i);
-      }
-    }
   };
 
   // Cleanup observer when page unloads
@@ -816,15 +724,18 @@ body {
      * @returns {Object} Progress information
      */
     calculateProgress(item) {
-      const total = item.size || item.sizeNz || 0;
-      const left = item.sizeLeft != null ? item.sizeLeft : (item.sizeLeft || 0);
-      const percent = total && left != null ? 
-        Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100))) : null;
+      const total = typeof item.size === 'number' ? item.size : (typeof item.sizeNz === 'number' ? item.sizeNz : null);
+      const left = typeof item.sizeLeft === 'number' ? item.sizeLeft : null;
 
+      if (total == null || left == null || total <= 0 || left < 0) {
+        return { label: 'Downloading', isComplete: false, percent: null };
+      }
+
+      const percent = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
       return {
-        label: percent != null ? `${percent}%` : 'Downloading',
+        label: `${percent}%`,
         isComplete: left === 0,
-        percent: percent
+        percent
       };
     },
 
@@ -896,21 +807,12 @@ body {
     }
   };
 
-  /**
-   * Starts polling Whisparr queue for a movie and updates the button extra with progress
-   * @param {number} movieId - The movie ID to poll
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {void}
-   */
+  /** Start polling Whisparr queue for a movie and update progress. */
   function startQueueProgressPolling(movieId, updateStatus) {
     QueuePollingManager.startPolling(movieId, updateStatus);
   }
 
-  /**
-   * Checks if a scene is available in Stash
-   * @param {string} stashId - The StashDB scene ID
-   * @returns {Promise<string|null>} Local Stash scene ID if found, null otherwise
-   */
+  /** Check if a scene exists in local Stash. */
   async function checkStashAvailability(stashId) {
     try {
       const localStashSceneId = await getLocalStashSceneIdByStashId(stashId);
@@ -921,11 +823,7 @@ body {
     }
   }
 
-  /**
-   * Checks if a scene exists in Whisparr and returns its status
-   * @param {string} stashId - The StashDB scene ID
-   * @returns {Promise<Object|null>} Whisparr scene object or null if not found
-   */
+  /** Check Whisparr for existing movie status by stashId. */
   async function checkWhisparrStatus(stashId) {
     try {
       const existingScene = await fetchSceneWithQueueStatus(stashId);
@@ -936,12 +834,7 @@ body {
     }
   }
 
-  /**
-   * Handles the download flow for a scene
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Handle end-to-end download flow based on Whisparr state. */
   async function handleDownloadFlow(whisparrScene, updateStatus) {
     if (!whisparrScene) {
       return;
@@ -965,15 +858,18 @@ body {
     await handleUnmonitoredScene(whisparrScene, updateStatus);
   }
 
-  /**
-   * Handles a scene that has a file available
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Handle a scene that already has a file. */
   async function handleSceneWithFile(whisparrScene, updateStatus) {
     try {
       const localStashSceneId = await getLocalStashSceneId(whisparrScene);
+      if (!localStashSceneId) {
+        updateStatus({
+          button: `${icons.monitor}<span>Monitored</span>`,
+          className: 'btn-monitor',
+          extra: '',
+        });
+        return;
+      }
       const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
       updateStatus({
         button: `${icons.play}<span>Play</span>`,
@@ -988,12 +884,7 @@ body {
     }
   }
 
-  /**
-   * Handles a scene that is currently in the download queue
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Handle a scene that is currently in the queue. */
   async function handleSceneInQueue(whisparrScene, updateStatus) {
     updateStatus({
       button: `${icons.loading}<span>Downloading</span>`,
@@ -1005,12 +896,7 @@ body {
     }
   }
 
-  /**
-   * Handles a monitored scene that may or may not be in queue
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Handle a monitored scene and check if it is in queue. */
   async function handleMonitoredScene(whisparrScene, updateStatus) {
     try {
       const queue = await fetchWhisparr('/queue/details?all=true');
@@ -1026,12 +912,7 @@ body {
     updateStatusToMonitored(whisparrScene, updateStatus);
   }
 
-  /**
-   * Handles an unmonitored scene by checking download availability
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Handle an unmonitored scene by checking availability. */
   async function handleUnmonitoredScene(whisparrScene, updateStatus) {
           updateStatus({
       button: `${icons.loading}<span>Checking download availability...</span>`,
@@ -1047,13 +928,7 @@ body {
     }
   }
 
-  /**
-   * Handles different download availability states
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {string} availability - Download availability status
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Handle different download availability states. */
   async function handleDownloadAvailability(whisparrScene, availability, updateStatus) {
     switch (availability) {
       case 'available for download':
@@ -1081,12 +956,7 @@ body {
     }
   }
 
-  /**
-   * Initiates download for a scene
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Initiate a movie search/download in Whisparr. */
   async function initiateDownload(whisparrScene, updateStatus) {
         updateStatus({
       button: `${icons.loading}<span>Downloading</span>`,
@@ -1110,12 +980,7 @@ body {
     }
     }
 
-    /**
-     * Updates button to show scene is currently monitored
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {void}
-     */
+    /** Update button to show scene is monitored. */
   function updateStatusToMonitored(whisparrScene, updateStatus) {
       updateStatus({
         button: `${icons.monitor}<span>Monitored</span>`,
@@ -1137,12 +1002,7 @@ body {
       });
     }
 
-    /**
-     * Updates button to show scene is currently unmonitored
-   * @param {Object} whisparrScene - The Whisparr scene object
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {void}
-     */
+    /** Update button to show scene is unmonitored. */
   function updateStatusToUnmonitored(whisparrScene, updateStatus) {
       updateStatus({
         button: `${icons.monitorOff}<span>Monitor</span>`,
@@ -1172,12 +1032,7 @@ body {
       });
     }
 
-  /**
-   * Checks if a scene is available in Stash or Whisparr
-   * @param {string} stashId - The StashDB scene ID
-   * @param {Function} updateStatus - Function to update button status
-   * @returns {Promise<void>}
-   */
+  /** Check availability in Stash first, then Whisparr. */
   async function checkIfAvailable(stashId, updateStatus) {
     // First check if scene already exists in Stash
     updateStatus({
@@ -1272,16 +1127,12 @@ body {
     }
   }
 
-  /**
-   * Fetches a scene from Whisparr by stashId and adds queue status if no file exists
-   * @param {string} stashId - The StashDB scene ID
-   * @returns {Promise<Object|null>} The Whisparr scene object or null if not found
-   */
+  /** Fetch Whisparr movie by stashId and attach queue status. */
   async function fetchSceneWithQueueStatus(stashId) {
     const scenes = await fetchWhisparr('/movie');
     
-    if (!Validator.isValidApiResponse(scenes, 'object') || !Array.isArray(scenes)) {
-      ErrorHandler.logError('Invalid scenes response', new Error('Invalid API response format'));
+    if (!Array.isArray(scenes)) {
+      ErrorHandler.logError('Invalid scenes response', new Error('Expected array'));
       return null;
     }
     
@@ -1290,7 +1141,7 @@ body {
     if (scene && !scene.hasFile) {
       const queue = await fetchWhisparr('/queue/details?all=true');
       
-      if (Validator.isValidApiResponse(queue, 'object') && Array.isArray(queue)) {
+      if (Array.isArray(queue)) {
         scene.queueStatus = queue.find((queueItem) => 
           Validator.isValidQueueItem(queueItem) && queueItem.movieId === scene.id
         );
