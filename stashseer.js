@@ -850,7 +850,7 @@ body {
       updateStatus({
         button: `${icons.loading}<span>Downloading</span>`,
         className: 'btn-loading',
-        extra: `View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
+        extra: '',
       });
       if (whisparrScene.id) {
         startQueueProgressPolling(whisparrScene.id, updateStatus);
@@ -865,7 +865,7 @@ body {
           updateStatus({
             button: `${icons.loading}<span>Downloading</span>`,
             className: 'btn-loading',
-            extra: `View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
+            extra: '',
           });
           if (whisparrScene.id) {
             startQueueProgressPolling(whisparrScene.id, updateStatus);
@@ -916,7 +916,7 @@ body {
             updateStatus({
               button: `${icons.loading}<span>Downloading</span>`,
               className: 'btn-loading',
-              extra: `Added to <a href="${whisparrBaseUrl}/activity/queue">download queue</a>.`,
+              extra: '',
             });
             if (whisparrScene.id) {
               startQueueProgressPolling(whisparrScene.id, updateStatus);
@@ -928,7 +928,7 @@ body {
         updateStatus({
           button: `${icons.loading}<span>Downloading</span>`,
           className: 'btn-loading',
-          extra: `View <a href="${whisparrBaseUrl}/activity/queue">queue</a>`,
+          extra: '',
         });
         if (whisparrScene.id) {
           startQueueProgressPolling(whisparrScene.id, updateStatus);
