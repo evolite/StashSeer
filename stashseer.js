@@ -52,33 +52,7 @@ const MAX_ELEMENT_WAIT_MS = 10000; // 10 seconds max wait for DOM elements
 const QUEUE_POLL_INTERVAL_MS = 3000; // Poll Whisparr queue
 const STASHDB_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Error handling utilities
-const ErrorHandler = {
-  /** Log errors with consistent formatting. */
-  logError(context, error, userMessage = null) {
-    const timestamp = new Date().toISOString();
-    console.error(`[${timestamp}] ${context}:`, error);
-    if (userMessage) {
-      console.error(`User message: ${userMessage}`);
-    }
-  },
-
-  /** Handle API errors and update UI status. */
-  handleApiError(operation, error, updateStatus) {
-    this.logError(`API Error in ${operation}`, error);
-    
-    let userMessage = `Error during ${operation}`;
-    if (error.statusCode) {
-      userMessage += ` (HTTP ${error.statusCode})`;
-    }
-    
-    updateStatus({
-      button: `${icons.error}<span>Error</span>`,
-      className: 'btn-error',
-      extra: userMessage,
-    });
-  }
-};
+// Error handler is defined later inside the IIFE to access `icons`
 
 // Input validation utilities
 const Validator = {
@@ -299,6 +273,32 @@ body {
     whisparr: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/></svg>`,
     stash: `<svg viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm8 1a1 1 0 1 0-2 0 1 1 0 0 0 2 0zm2 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0z"/></svg>`,
     settings: `<svg viewBox="0 0 16 16"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319z"/></svg>`,
+  };
+
+  // Error handling utilities (placed here to access `icons` in scope)
+  const ErrorHandler = {
+    /** Log errors with consistent formatting. */
+    logError(context, error, userMessage = null) {
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}] ${context}:`, error);
+      if (userMessage) {
+        console.error(`User message: ${userMessage}`);
+      }
+    },
+
+    /** Handle API errors and update UI status. */
+    handleApiError(operation, error, updateStatus) {
+      this.logError(`API Error in ${operation}`, error);
+      let userMessage = `Error during ${operation}`;
+      if (error && error.statusCode) {
+        userMessage += ` (HTTP ${error.statusCode})`;
+      }
+      updateStatus({
+        button: `${icons.error}<span>Error</span>`,
+        className: 'btn-error',
+        extra: userMessage,
+      });
+    }
   };
 
   /** Escape HTML to prevent XSS. */
@@ -695,7 +695,8 @@ body {
       }
 
         const queue = await fetchWhisparr('/queue/details?all=true');
-        const item = queue.find((q) => q.movieId === movieId);
+        const items = Array.isArray(queue) ? queue : (Array.isArray(queue?.records) ? queue.records : []);
+        const item = items.find((q) => q.movieId === movieId);
       
         if (!item) {
         // Not in queue anymore; stop polling and update final state
@@ -724,19 +725,24 @@ body {
      * @returns {Object} Progress information
      */
     calculateProgress(item) {
-      const total = typeof item.size === 'number' ? item.size : (typeof item.sizeNz === 'number' ? item.sizeNz : null);
-      const left = typeof item.sizeLeft === 'number' ? item.sizeLeft : null;
-
-      if (total == null || left == null || total <= 0 || left < 0) {
-        return { label: 'Downloading', isComplete: false, percent: null };
+      if (typeof item.progress === 'number' && isFinite(item.progress)) {
+        const pct = Math.max(0, Math.min(100, Math.round(item.progress)));
+        return { label: `${pct}%`, isComplete: pct >= 100, percent: pct };
       }
-
-      const percent = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
-      return {
-        label: `${percent}%`,
-        isComplete: left === 0,
-        percent
+      const pickNumber = (...candidates) => {
+        for (const v of candidates) {
+          if (typeof v === 'number' && isFinite(v)) return v;
+        }
+        return null;
       };
+      const total = pickNumber(item.size, item.sizeNz, item.sizeBytes, item.sizebytes);
+      const left = pickNumber(item.sizeLeft, item.sizeleft, item.sizeLeftBytes, item.sizeleftBytes);
+      if (total == null || left == null || total <= 0 || left < 0) {
+        const label = typeof item.status === 'string' && item.status ? item.status : 'Downloading';
+        return { label, isComplete: false, percent: null };
+      }
+      const percent = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
+      return { label: `${percent}%`, isComplete: left === 0 || percent >= 100, percent };
     },
 
     /**
@@ -1177,6 +1183,9 @@ body {
           tags: [],
           title: 'added via stashdb extension',
         },
+        retryAttempts: 3,
+        retryDelayMs: 1500,
+        retryOnStatus: [400, 409, 429, 500, 502, 503, 504],
       });
     } catch (error) {
       ErrorHandler.logError('Adding scene to Whisparr', error);
@@ -1210,6 +1219,9 @@ body {
           tags: [],
           title: 'added via stashdb extension',
         },
+        retryAttempts: 3,
+        retryDelayMs: 1500,
+        retryOnStatus: [400, 409, 429, 500, 502, 503, 504],
       });
 
       // Trigger MoviesSearch after delay for the newly added monitored scene
@@ -1496,47 +1508,73 @@ body {
    */
   function factoryFetchApi(baseUrl, defaultHeaders, addCloudflareHeaders = false, defaultTimeoutMs = 15000) {
     return async (subPath, options = {}) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? defaultTimeoutMs);
+      const retryAttempts = Number.isFinite(options.retryAttempts) ? options.retryAttempts : 2;
+      const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : 1000;
+      const retryOnStatus = Array.isArray(options.retryOnStatus) && options.retryOnStatus.length > 0
+        ? options.retryOnStatus
+        : [429, 500, 502, 503, 504, 520, 522, 524];
+      const retryOnNetworkErrors = options.retryOnNetworkErrors !== false;
 
-      const hasBody = options.body !== undefined && options.body !== null;
-      const method = options.method || (hasBody ? 'POST' : 'GET');
-
-      const headers = {
-        ...defaultHeaders,
-        ...(hasBody && typeof options.body === 'object' ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {}),
-        ...(addCloudflareHeaders && cfAccessClientId ? { 'CF-Access-Client-Id': cfAccessClientId } : {}),
-        ...(addCloudflareHeaders && cfAccessClientSecret ? { 'CF-Access-Client-Secret': cfAccessClientSecret } : {}),
-      };
-
-      const url = new URL(String(subPath || '').replace(/^\/*/g, ''), baseUrl);
-      const body = hasBody && typeof options.body === 'object' ? JSON.stringify(options.body) : options.body;
-
-      const res = await fetch(url, {
-        method,
-        mode: 'cors',
-        credentials: 'omit',
-        ...options,
-        method, // ensure method is not overridden by spread
-        headers,
-        body,
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
-
-      if (!res.ok) {
-        let parsed;
+      let lastError;
+      for (let attempt = 0; attempt <= retryAttempts; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? defaultTimeoutMs);
         try {
-          parsed = await res.json();
-        } catch (_) {
-          // Ignore JSON parse errors for error responses
+          const hasBody = options.body !== undefined && options.body !== null;
+          const method = options.method || (hasBody ? 'POST' : 'GET');
+
+          const headers = {
+            ...defaultHeaders,
+            ...(hasBody && typeof options.body === 'object' ? { 'Content-Type': 'application/json' } : {}),
+            ...(options.headers || {}),
+            ...(addCloudflareHeaders && cfAccessClientId ? { 'CF-Access-Client-Id': cfAccessClientId } : {}),
+            ...(addCloudflareHeaders && cfAccessClientSecret ? { 'CF-Access-Client-Secret': cfAccessClientSecret } : {}),
+          };
+
+          const url = new URL(String(subPath || '').replace(/^\/*/g, ''), baseUrl);
+          const body = hasBody && typeof options.body === 'object' ? JSON.stringify(options.body) : options.body;
+
+          const res = await fetch(url, {
+            method,
+            mode: 'cors',
+            credentials: 'omit',
+            ...options,
+            method, // ensure method is not overridden by spread
+            headers,
+            body,
+            signal: controller.signal,
+          }).finally(() => clearTimeout(timeoutId));
+
+          if (!res.ok) {
+            let parsed;
+            try {
+              parsed = await res.json();
+            } catch (_) {}
+            const error = new Error(`HTTP ${res.status}: ${res.statusText}`);
+            error.statusCode = res.status;
+            error.resBody = parsed;
+            // Decide whether to retry
+            if (attempt < retryAttempts && retryOnStatus.includes(res.status)) {
+              const backoff = retryDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 250);
+              await new Promise((r) => setTimeout(r, backoff));
+              continue;
+            }
+            throw error;
+          }
+          return res.json();
+        } catch (err) {
+          lastError = err;
+          const isAbortError = err && (err.name === 'AbortError');
+          const isNetwork = err && (isAbortError || err.message === 'Failed to fetch');
+          if (attempt < retryAttempts && retryOnNetworkErrors && isNetwork) {
+            const backoff = retryDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 250);
+            await new Promise((r) => setTimeout(r, backoff));
+            continue;
+          }
+          throw err;
         }
-        const error = new Error(`HTTP ${res.status}: ${res.statusText}`);
-        error.statusCode = res.status;
-        error.resBody = parsed;
-        throw error;
       }
-      return res.json();
+      throw lastError;
     };
   }
 }());
