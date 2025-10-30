@@ -337,16 +337,27 @@ body {
     return folders.map((f) => ({ id: f.id, path: f.path }));
   }
 
-  /** Test connection to local Stash using a minimal GraphQL query. */
+  /** Test connection to local Stash using a minimal GraphQL query.
+   * Some GraphQL servers return HTTP 400 for schema errors but still indicate reachability.
+   * We accept 400 when the payload looks like a GraphQL error response.
+   */
   async function testStashConnection() {
-    const res = await localStashGraphQl({
-      variables: {},
-      query: `query { allStudios { count } }`,
-    });
-    if (!res || typeof res !== 'object') {
-      throw new Error('Invalid GraphQL response');
+    try {
+      const res = await localStashGraphQl({
+        variables: {},
+        query: `query { __typename }`,
+      });
+      if (!res || typeof res !== 'object') {
+        throw new Error('Invalid GraphQL response');
+      }
+      return true;
+    } catch (err) {
+      // Treat HTTP 400 with GraphQL error payload as reachable (auth/URL likely fine)
+      if (err && err.statusCode === 400 && err.resBody && (Array.isArray(err.resBody.errors) || typeof err.resBody.data !== 'undefined')) {
+        return true;
+      }
+      throw err;
     }
-    return true;
   }
 
   
