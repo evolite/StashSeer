@@ -508,11 +508,7 @@ body {
           <input type="password" name="whisparrApiKey" value="${escapeHtml(currentConfig.whisparrApiKey)}" 
                  style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
         </div>
-        <div style="margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr Root Folder Path:</label>
-          <input type="text" name="whisparrRootFolderPath" value="${escapeHtml(currentConfig.whisparrRootFolderPath)}" 
-                 style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
-        </div>
+        <!-- Root folder text input removed; selection will be provided after Test Connections -->
         <div style="margin-bottom: 1rem;">
           <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Stash Root URL:</label>
           <input type="text" name="localStashRootUrl" value="${escapeHtml(currentConfig.localStashRootUrl)}" 
@@ -555,7 +551,7 @@ body {
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
           <button type="button" id="cancelBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
-          <button type="submit" style="padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Save</button>
+          <button type="submit" id="saveBtn" style="display:none; padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Save</button>
         </div>
       </form>
     `;
@@ -565,18 +561,33 @@ body {
 
     const form = content.querySelector('#settingsForm');
     const cancelBtn = content.querySelector('#cancelBtn');
+    const saveBtn = content.querySelector('#saveBtn');
     const testBtn = content.querySelector('#testBtn');
     const testSpinner = content.querySelector('#testSpinner');
     const testResults = content.querySelector('#testResults');
     const rootFolderSelectRow = content.querySelector('#rootFolderSelectRow');
     const rootFolderSelect = content.querySelector('#whisparrRootFolderSelect');
-    const rootFolderInput = content.querySelector('input[name="whisparrRootFolderPath"]');
+    const rootFolderInput = null; // removed manual input
+    const setSaveVisibility = (visible) => {
+      if (!saveBtn) return;
+      saveBtn.style.display = visible ? 'inline-block' : 'none';
+    };
+    const setSaveEnabled = (enabled) => {
+      if (!saveBtn) return;
+      saveBtn.disabled = !enabled;
+      saveBtn.style.opacity = enabled ? '1' : '0.6';
+      saveBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    };
+    // Hide Save until test runs successfully
+    setSaveVisibility(false);
 
     // Handle Test Connections
     testBtn?.addEventListener('click', async () => {
       testResults.innerHTML = '';
       testSpinner.style.display = 'inline-block';
       testBtn.disabled = true;
+      setSaveVisibility(false);
+      setSaveEnabled(false);
       const addLine = (ok, label, message = '') => {
         const icon = ok ? '✔️' : '❌';
         const color = ok ? '#9ae6b4' : '#feb2b2';
@@ -615,9 +626,7 @@ body {
             const opt = document.createElement('option');
             opt.value = f.path;
             opt.textContent = f.path;
-            if (rootFolderInput && rootFolderInput.value && rootFolderInput.value === f.path) {
-              opt.selected = true;
-            }
+            // No prefill from config; require explicit selection
             rootFolderSelect.appendChild(opt);
           }
           rootFolderSelectRow.style.display = whisparrRes.folders.length ? 'block' : 'none';
@@ -631,6 +640,11 @@ body {
         } else {
           addLine(false, 'Stash', formatUserError(stashRes.error));
         }
+
+        // Only allow Save when both services are OK and a root folder is selectable
+        const canShowSave = !!(whisparrRes.ok && stashRes.ok && rootFolderSelectRow.style.display === 'block');
+        setSaveVisibility(canShowSave);
+        setSaveEnabled(canShowSave && !!rootFolderSelect.value);
       } finally {
         testSpinner.style.display = 'none';
         testBtn.disabled = false;
@@ -639,7 +653,7 @@ body {
 
     // Sync dropdown -> input
     rootFolderSelect?.addEventListener('change', () => {
-      if (rootFolderInput) rootFolderInput.value = rootFolderSelect.value || '';
+      setSaveEnabled(!!rootFolderSelect.value);
     });
 
     form.addEventListener('submit', (e) => {
@@ -650,7 +664,7 @@ body {
         whisparrApiKey: formData.get('whisparrApiKey'),
         localStashRootUrl: formData.get('localStashRootUrl'),
         stashApiKey: formData.get('stashApiKey'),
-        whisparrRootFolderPath: (rootFolderSelect && rootFolderSelect.value) ? rootFolderSelect.value : formData.get('whisparrRootFolderPath'),
+        whisparrRootFolderPath: (rootFolderSelect && rootFolderSelect.value) ? rootFolderSelect.value : '',
         cfAccessClientId: formData.get('cfAccessClientId'),
         cfAccessClientSecret: formData.get('cfAccessClientSecret'),
         whisparrNeedsCloudflare: formData.get('whisparrNeedsCloudflare') === 'on',
@@ -674,6 +688,12 @@ body {
         new URL(newConfig.localStashRootUrl);
       } catch (error) {
         alert('Invalid URL format! Please check your URLs.');
+        return;
+      }
+
+      // Ensure user has tested and selected a root folder before saving
+      if (!rootFolderSelect || !rootFolderSelect.value) {
+        alert('Please run Test Connections and select a Whisparr root folder before saving.');
         return;
       }
 
