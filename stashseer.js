@@ -311,6 +311,55 @@ body {
     return div.innerHTML;
   }
 
+  /** Build a concise user-facing error string for connection tests. */
+  function formatUserError(error) {
+    if (!error) return 'Unknown error';
+    const parts = [];
+    if (error.statusCode) parts.push(`HTTP ${error.statusCode}`);
+    if (error.message) parts.push(error.message.replace(/^Error:\s*/, ''));
+    if (error.resBody && typeof error.resBody === 'object') {
+      const msg = error.resBody.message || error.resBody.error || error.resBody.reason;
+      if (msg) parts.push(String(msg));
+    }
+    return parts.filter(Boolean).join(' - ') || 'Unknown error';
+  }
+
+  /** Test connection to Whisparr and optionally fetch root folders. */
+  async function testWhisparrConnectionAndFolders() {
+    // Try fetching root folders; this also validates API key and URL
+    const folders = await fetchWhisparr('/rootfolder', {
+      retryAttempts: 1,
+      retryOnStatus: [429, 500, 502, 503, 504],
+    });
+    if (!Array.isArray(folders)) {
+      throw new Error('Unexpected response for root folders');
+    }
+    return folders.map((f) => ({ id: f.id, path: f.path }));
+  }
+
+  /** Test connection to local Stash using a minimal GraphQL query.
+   * Some GraphQL servers return HTTP 400 for schema errors but still indicate reachability.
+   * We accept 400 when the payload looks like a GraphQL error response.
+   */
+  async function testStashConnection() {
+    try {
+      const res = await localStashGraphQl({
+        variables: {},
+        query: `query { __typename }`,
+      });
+      if (!res || typeof res !== 'object') {
+        throw new Error('Invalid GraphQL response');
+      }
+      return true;
+    } catch (err) {
+      // Treat HTTP 400 with GraphQL error payload as reachable (auth/URL likely fine)
+      if (err && err.statusCode === 400 && err.resBody && (Array.isArray(err.resBody.errors) || typeof err.resBody.data !== 'undefined')) {
+        return true;
+      }
+      throw err;
+    }
+  }
+
   
 
   /** Create Whisparr/Stash control buttons and status updater. */
@@ -459,11 +508,7 @@ body {
           <input type="password" name="whisparrApiKey" value="${escapeHtml(currentConfig.whisparrApiKey)}" 
                  style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
         </div>
-        <div style="margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr Root Folder Path:</label>
-          <input type="text" name="whisparrRootFolderPath" value="${escapeHtml(currentConfig.whisparrRootFolderPath)}" 
-                 style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
-        </div>
+        <!-- Root folder text input removed; selection will be provided after Test Connections -->
         <div style="margin-bottom: 1rem;">
           <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Stash Root URL:</label>
           <input type="text" name="localStashRootUrl" value="${escapeHtml(currentConfig.localStashRootUrl)}" 
@@ -494,9 +539,16 @@ body {
                    style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
           </div>
         </div>
+        <div id="testResults" style="margin-bottom: 1rem; color: #cbd5e0; font-size: 0.9rem;"></div>
+        <div id="rootFolderSelectRow" style="display: none; margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Select Whisparr root folder:</label>
+          <select id="whisparrRootFolderSelect" style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;"></select>
+        </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
           <button type="button" id="cancelBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
-          <button type="submit" style="padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Save</button>
+          <button type="button" id="testBtn" style="padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Test Connections</button>
+          <span id="testSpinner" style="align-self:center; margin-left: 0.25rem; display: none; opacity: 0.9; color: #cbd5e0;">Testing...</span>
+          <button type="submit" id="saveBtn" style="display:none; padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Save</button>
         </div>
       </form>
     `;
@@ -506,6 +558,100 @@ body {
 
     const form = content.querySelector('#settingsForm');
     const cancelBtn = content.querySelector('#cancelBtn');
+    const saveBtn = content.querySelector('#saveBtn');
+    const testBtn = content.querySelector('#testBtn');
+    const testSpinner = content.querySelector('#testSpinner');
+    const testResults = content.querySelector('#testResults');
+    const rootFolderSelectRow = content.querySelector('#rootFolderSelectRow');
+    const rootFolderSelect = content.querySelector('#whisparrRootFolderSelect');
+    const rootFolderInput = null; // removed manual input
+    const setSaveVisibility = (visible) => {
+      if (!saveBtn) return;
+      saveBtn.style.display = visible ? 'inline-block' : 'none';
+    };
+    const setSaveEnabled = (enabled) => {
+      if (!saveBtn) return;
+      saveBtn.disabled = !enabled;
+      saveBtn.style.opacity = enabled ? '1' : '0.6';
+      saveBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    };
+    // Hide Save until test runs successfully
+    setSaveVisibility(false);
+
+    // Handle Test Connections
+    testBtn?.addEventListener('click', async () => {
+      testResults.innerHTML = '';
+      testSpinner.style.display = 'inline-block';
+      testBtn.disabled = true;
+      setSaveVisibility(false);
+      setSaveEnabled(false);
+      const addLine = (ok, label, message = '') => {
+        const icon = ok ? '✔️' : '❌';
+        const color = ok ? '#9ae6b4' : '#feb2b2';
+        const extra = message ? ` - ${escapeHtml(message)}` : '';
+        const line = document.createElement('div');
+        line.style.margin = '0.25rem 0';
+        line.innerHTML = `<span style="color:${color}">${icon}</span> <strong>${escapeHtml(label)}</strong>${extra}`;
+        testResults.appendChild(line);
+      };
+      try {
+        // Run both tests in parallel
+        const [whisparrRes, stashRes] = await Promise.all([
+          (async () => {
+            try {
+              const folders = await testWhisparrConnectionAndFolders();
+              return { ok: true, folders };
+            } catch (e) {
+              return { ok: false, error: e };
+            }
+          })(),
+          (async () => {
+            try {
+              await testStashConnection();
+              return { ok: true };
+            } catch (e) {
+              return { ok: false, error: e };
+            }
+          })(),
+        ]);
+
+        if (whisparrRes.ok) {
+          addLine(true, 'Whisparr', 'Connected');
+          // Populate folders
+          rootFolderSelect.innerHTML = '';
+          for (const f of whisparrRes.folders) {
+            const opt = document.createElement('option');
+            opt.value = f.path;
+            opt.textContent = f.path;
+            // No prefill from config; require explicit selection
+            rootFolderSelect.appendChild(opt);
+          }
+          rootFolderSelectRow.style.display = whisparrRes.folders.length ? 'block' : 'none';
+        } else {
+          addLine(false, 'Whisparr', formatUserError(whisparrRes.error));
+          rootFolderSelectRow.style.display = 'none';
+        }
+
+        if (stashRes.ok) {
+          addLine(true, 'Stash', 'Connected');
+        } else {
+          addLine(false, 'Stash', formatUserError(stashRes.error));
+        }
+
+        // Only allow Save when both services are OK and a root folder is selectable
+        const canShowSave = !!(whisparrRes.ok && stashRes.ok && rootFolderSelectRow.style.display === 'block');
+        setSaveVisibility(canShowSave);
+        setSaveEnabled(canShowSave && !!rootFolderSelect.value);
+      } finally {
+        testSpinner.style.display = 'none';
+        testBtn.disabled = false;
+      }
+    });
+
+    // Sync dropdown -> input
+    rootFolderSelect?.addEventListener('change', () => {
+      setSaveEnabled(!!rootFolderSelect.value);
+    });
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -515,7 +661,7 @@ body {
         whisparrApiKey: formData.get('whisparrApiKey'),
         localStashRootUrl: formData.get('localStashRootUrl'),
         stashApiKey: formData.get('stashApiKey'),
-        whisparrRootFolderPath: formData.get('whisparrRootFolderPath'),
+        whisparrRootFolderPath: (rootFolderSelect && rootFolderSelect.value) ? rootFolderSelect.value : '',
         cfAccessClientId: formData.get('cfAccessClientId'),
         cfAccessClientSecret: formData.get('cfAccessClientSecret'),
         whisparrNeedsCloudflare: formData.get('whisparrNeedsCloudflare') === 'on',
@@ -539,6 +685,12 @@ body {
         new URL(newConfig.localStashRootUrl);
       } catch (error) {
         alert('Invalid URL format! Please check your URLs.');
+        return;
+      }
+
+      // Ensure user has tested and selected a root folder before saving
+      if (!rootFolderSelect || !rootFolderSelect.value) {
+        alert('Please run Test Connections and select a Whisparr root folder before saving.');
         return;
       }
 
