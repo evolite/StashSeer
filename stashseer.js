@@ -539,10 +539,6 @@ body {
                    style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;">
           </div>
         </div>
-        <div style="margin-bottom: 0.75rem;">
-          <button type="button" id="testBtn" style="padding: 0.4rem 0.9rem; border: 1px solid #7e8a9a; border-radius: 0.25rem; background: #3b4252; color: white; cursor: pointer;">Test Connections</button>
-          <span id="testSpinner" style="margin-left: 0.5rem; display: none; opacity: 0.8;">Testing...</span>
-        </div>
         <div id="testResults" style="margin-bottom: 1rem; color: #cbd5e0; font-size: 0.9rem;"></div>
         <div id="rootFolderSelectRow" style="display: none; margin-bottom: 1rem;">
           <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr Root Folder (from server):</label>
@@ -551,6 +547,8 @@ body {
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
           <button type="button" id="cancelBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
+          <button type="button" id="testBtn" style="padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Test Connections</button>
+          <span id="testSpinner" style="align-self:center; margin-left: 0.25rem; display: none; opacity: 0.9; color: #cbd5e0;">Testing...</span>
           <button type="submit" id="saveBtn" style="display:none; padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer;">Save</button>
         </div>
       </form>
