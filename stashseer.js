@@ -541,9 +541,8 @@ body {
         </div>
         <div id="testResults" style="margin-bottom: 1rem; color: #cbd5e0; font-size: 0.9rem;"></div>
         <div id="rootFolderSelectRow" style="display: none; margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Whisparr Root Folder (from server):</label>
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Select Whisparr root folder:</label>
           <select id="whisparrRootFolderSelect" style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;"></select>
-          <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #a0aec0;">Selecting here will update the text field above.</div>
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
           <button type="button" id="cancelBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
