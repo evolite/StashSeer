@@ -18,10 +18,18 @@
 
 /** Get configuration from Tampermonkey storage. */
 function getConfig() {
+  // Support multiple root folders (array), with backward compatibility
+  let whisparrRootFolders = GM_getValue('whisparrRootFolders', null);
+  if (!whisparrRootFolders) {
+    // Migrate from old single folder setting
+    const oldPath = GM_getValue('whisparrRootFolderPath', '/data/');
+    whisparrRootFolders = oldPath ? [oldPath] : [];
+  }
+  
   return {
     whisparrBaseUrl: GM_getValue('whisparrBaseUrl', 'http://localhost:6969'),
     whisparrApiKey: GM_getValue('whisparrApiKey', ''),
-    whisparrRootFolderPath: GM_getValue('whisparrRootFolderPath', '/data/'),
+    whisparrRootFolders: whisparrRootFolders, // Array of root folder paths
     localStashRootUrl: GM_getValue('localStashRootUrl', 'http://localhost:9999'),
     stashApiKey: GM_getValue('stashApiKey', ''),
     cfAccessClientId: GM_getValue('cfAccessClientId', ''),
@@ -35,7 +43,12 @@ function getConfig() {
 function setConfig(config) {
   GM_setValue('whisparrBaseUrl', config.whisparrBaseUrl);
   GM_setValue('whisparrApiKey', config.whisparrApiKey);
-  GM_setValue('whisparrRootFolderPath', config.whisparrRootFolderPath);
+  // Save as array - ensure it's always an array
+  const rootFolders = Array.isArray(config.whisparrRootFolders) 
+    ? config.whisparrRootFolders 
+    : (config.whisparrRootFolders ? [config.whisparrRootFolders] : []);
+  GM_setValue('whisparrRootFolders', rootFolders);
+  // Keep old key for backward compatibility but prefer new array
   GM_setValue('localStashRootUrl', config.localStashRootUrl);
   GM_setValue('stashApiKey', config.stashApiKey);
   GM_setValue('cfAccessClientId', config.cfAccessClientId);
@@ -81,7 +94,7 @@ const Validator = {
 const config = getConfig();
 const whisparrBaseUrl = config.whisparrBaseUrl;
 const whisparrApiKey = config.whisparrApiKey;
-const whisparrRootFolderPath = config.whisparrRootFolderPath;
+const whisparrRootFolders = config.whisparrRootFolders || []; // Array of root folders
 const localStashRootUrl = config.localStashRootUrl;
 const localStashGraphQlEndpoint = `${localStashRootUrl}/graphql`;
 const localStashAuthHeaders = { ApiKey: config.stashApiKey };
@@ -360,7 +373,142 @@ body {
     }
   }
 
-  
+  /**
+   * Shows a dialog to select a root folder when multiple are configured
+   * @param {Array<string>} folders - Array of root folder paths
+   * @returns {Promise<string|null>} Selected folder path or null if cancelled
+   */
+  async function showRootFolderSelectionDialog(folders) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
+      `;
+
+      const content = document.createElement('div');
+      content.style.cssText = `
+        background: #2d3748;
+        padding: 2rem;
+        border-radius: 0.5rem;
+        max-width: 500px;
+        width: 90%;
+        color: white;
+      `;
+
+      content.innerHTML = `
+        <h3 style="margin-top: 0; color: #4d9fff;">Select Root Folder</h3>
+        <p style="color: #cbd5e0; margin-bottom: 1rem;">Please select which root folder to use for this scene:</p>
+        <div id="folderList" style="margin-bottom: 1.5rem;"></div>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+          <button type="button" id="cancelFolderBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
+          <button type="button" id="confirmFolderBtn" disabled style="padding: 0.5rem 1rem; border: 1px solid #4d9fff; border-radius: 0.25rem; background: #4d9fff; color: white; cursor: pointer; opacity: 0.5;">Select</button>
+        </div>
+      `;
+
+      dialog.appendChild(content);
+      document.body.appendChild(dialog);
+
+      const folderList = content.querySelector('#folderList');
+      const cancelBtn = content.querySelector('#cancelFolderBtn');
+      const confirmBtn = content.querySelector('#confirmFolderBtn');
+      let selectedFolder = null;
+
+      // Create radio buttons for each folder
+      folders.forEach((folder, index) => {
+        const label = document.createElement('label');
+        label.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; cursor: pointer; margin: 0.5rem 0; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; transition: all 0.2s;';
+        label.style.color = 'white';
+        
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'rootFolder';
+        radio.value = folder;
+        radio.style.cssText = 'width: 1.25rem; height: 1.25rem; cursor: pointer;';
+        if (index === 0) {
+          radio.checked = true;
+          selectedFolder = folder;
+          confirmBtn.disabled = false;
+          confirmBtn.style.opacity = '1';
+        }
+        
+        radio.addEventListener('change', () => {
+          if (radio.checked) {
+            selectedFolder = folder;
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+            // Update visual selection
+            folderList.querySelectorAll('label').forEach(l => {
+              l.style.borderColor = '#4a5568';
+              l.style.background = '#1a202c';
+            });
+            label.style.borderColor = '#4d9fff';
+            label.style.background = '#2c5282';
+          }
+        });
+        
+        const span = document.createElement('span');
+        span.textContent = folder;
+        
+        label.appendChild(radio);
+        label.appendChild(span);
+        folderList.appendChild(label);
+        
+        // Set initial selection styling
+        if (index === 0) {
+          label.style.borderColor = '#4d9fff';
+          label.style.background = '#2c5282';
+        }
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(dialog);
+        resolve(null);
+      });
+
+      confirmBtn.addEventListener('click', () => {
+        document.body.removeChild(dialog);
+        resolve(selectedFolder);
+      });
+
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+          document.body.removeChild(dialog);
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  /**
+   * Gets the root folder to use, automatically selecting if single, prompting if multiple
+   * @returns {Promise<string|null>} Selected root folder path or null if cancelled/error
+   */
+  async function getRootFolderPath() {
+    const currentConfig = getConfig();
+    const folders = currentConfig.whisparrRootFolders || [];
+    
+    if (folders.length === 0) {
+      ErrorHandler.logError('Root folder selection', new Error('No root folders configured'));
+      return null;
+    }
+    
+    if (folders.length === 1) {
+      // Single folder - use it automatically
+      return folders[0];
+    }
+    
+    // Multiple folders - prompt user to select
+    return await showRootFolderSelectionDialog(folders);
+  }
 
   /** Create Whisparr/Stash control buttons and status updater. */
   function createButton() {
@@ -541,8 +689,9 @@ body {
         </div>
         <div id="testResults" style="margin-bottom: 1rem; color: #cbd5e0; font-size: 0.9rem;"></div>
         <div id="rootFolderSelectRow" style="display: none; margin-bottom: 1rem;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Select Whisparr root folder:</label>
-          <select id="whisparrRootFolderSelect" style="width: 100%; padding: 0.5rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #1a202c; color: white;"></select>
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Select Whisparr root folder(s):</label>
+          <div id="rootFolderCheckboxes" style="max-height: 200px; overflow-y: auto; border: 1px solid #4a5568; border-radius: 0.25rem; padding: 0.5rem; background: #1a202c;"></div>
+          <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #cbd5e0;">You can select multiple folders. When adding scenes, you'll be prompted to choose one if multiple are configured.</div>
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
           <button type="button" id="cancelBtn" style="padding: 0.5rem 1rem; border: 1px solid #4a5568; border-radius: 0.25rem; background: #4a5568; color: white; cursor: pointer;">Cancel</button>
@@ -563,8 +712,7 @@ body {
     const testSpinner = content.querySelector('#testSpinner');
     const testResults = content.querySelector('#testResults');
     const rootFolderSelectRow = content.querySelector('#rootFolderSelectRow');
-    const rootFolderSelect = content.querySelector('#whisparrRootFolderSelect');
-    const rootFolderInput = null; // removed manual input
+    const rootFolderCheckboxes = content.querySelector('#rootFolderCheckboxes');
     const setSaveVisibility = (visible) => {
       if (!saveBtn) return;
       saveBtn.style.display = visible ? 'inline-block' : 'none';
@@ -617,14 +765,26 @@ body {
 
         if (whisparrRes.ok) {
           addLine(true, 'Whisparr', 'Connected');
-          // Populate folders
-          rootFolderSelect.innerHTML = '';
+          // Populate folders as checkboxes
+          rootFolderCheckboxes.innerHTML = '';
+          const currentSelected = currentConfig.whisparrRootFolders || [];
           for (const f of whisparrRes.folders) {
-            const opt = document.createElement('option');
-            opt.value = f.path;
-            opt.textContent = f.path;
-            // No prefill from config; require explicit selection
-            rootFolderSelect.appendChild(opt);
+            const label = document.createElement('label');
+            label.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer; margin: 0.25rem 0;';
+            label.style.color = 'white';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = f.path;
+            checkbox.checked = currentSelected.includes(f.path);
+            checkbox.style.cssText = 'width: 1.25rem; height: 1.25rem; cursor: pointer;';
+            
+            const span = document.createElement('span');
+            span.textContent = f.path;
+            
+            label.appendChild(checkbox);
+            label.appendChild(span);
+            rootFolderCheckboxes.appendChild(label);
           }
           rootFolderSelectRow.style.display = whisparrRes.folders.length ? 'block' : 'none';
         } else {
@@ -638,30 +798,37 @@ body {
           addLine(false, 'Stash', formatUserError(stashRes.error));
         }
 
-        // Only allow Save when both services are OK and a root folder is selectable
-        const canShowSave = !!(whisparrRes.ok && stashRes.ok && rootFolderSelectRow.style.display === 'block');
-        setSaveVisibility(canShowSave);
-        setSaveEnabled(canShowSave && !!rootFolderSelect.value);
+        // Only allow Save when both services are OK and at least one root folder is selected
+        const updateSaveButton = () => {
+          const selectedFolders = Array.from(rootFolderCheckboxes.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+          const canShowSave = !!(whisparrRes.ok && stashRes.ok && selectedFolders.length > 0);
+          setSaveVisibility(canShowSave);
+          setSaveEnabled(canShowSave);
+        };
+        
+        // Update save button when checkboxes change
+        rootFolderCheckboxes.addEventListener('change', updateSaveButton);
+        updateSaveButton();
       } finally {
         testSpinner.style.display = 'none';
         testBtn.disabled = false;
       }
     });
 
-    // Sync dropdown -> input
-    rootFolderSelect?.addEventListener('change', () => {
-      setSaveEnabled(!!rootFolderSelect.value);
-    });
+    // No longer needed - handled in checkbox change listener
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const formData = new FormData(form);
+      // Get all selected root folders
+      const selectedFolders = Array.from(rootFolderCheckboxes.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+      
       const newConfig = {
         whisparrBaseUrl: formData.get('whisparrBaseUrl'),
         whisparrApiKey: formData.get('whisparrApiKey'),
         localStashRootUrl: formData.get('localStashRootUrl'),
         stashApiKey: formData.get('stashApiKey'),
-        whisparrRootFolderPath: (rootFolderSelect && rootFolderSelect.value) ? rootFolderSelect.value : '',
+        whisparrRootFolders: selectedFolders, // Array of selected root folders
         cfAccessClientId: formData.get('cfAccessClientId'),
         cfAccessClientSecret: formData.get('cfAccessClientSecret'),
         whisparrNeedsCloudflare: formData.get('whisparrNeedsCloudflare') === 'on',
@@ -688,9 +855,9 @@ body {
         return;
       }
 
-      // Ensure user has tested and selected a root folder before saving
-      if (!rootFolderSelect || !rootFolderSelect.value) {
-        alert('Please run Test Connections and select a Whisparr root folder before saving.');
+      // Ensure user has tested and selected at least one root folder before saving
+      if (selectedFolders.length === 0) {
+        alert('Please run Test Connections and select at least one Whisparr root folder before saving.');
         return;
       }
 
@@ -1321,6 +1488,11 @@ body {
     }
 
     try {
+      const rootFolderPath = await getRootFolderPath();
+      if (!rootFolderPath) {
+        throw new Error('Root folder selection cancelled or unavailable');
+      }
+
       return await fetchWhisparr('/movie', {
         body: {
           addOptions: {
@@ -1330,7 +1502,7 @@ body {
           foreignId: stashId,
           monitored: false,
           qualityProfileId: DEFAULT_QUALITY_PROFILE_ID,
-          rootFolderPath: whisparrRootFolderPath,
+          rootFolderPath: rootFolderPath,
           stashId,
           tags: [],
           title: 'added via stashdb extension',
@@ -1357,6 +1529,11 @@ body {
     }
 
     try {
+      const rootFolderPath = await getRootFolderPath();
+      if (!rootFolderPath) {
+        throw new Error('Root folder selection cancelled or unavailable');
+      }
+
       const newScene = await fetchWhisparr('/movie', {
         body: {
           addOptions: {
@@ -1366,7 +1543,7 @@ body {
           foreignId: stashId,
           monitored: true,
           qualityProfileId: DEFAULT_QUALITY_PROFILE_ID,
-          rootFolderPath: whisparrRootFolderPath,
+          rootFolderPath: rootFolderPath,
           stashId,
           tags: [],
           title: 'added via stashdb extension',
