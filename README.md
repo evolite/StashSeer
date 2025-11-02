@@ -8,6 +8,11 @@ Browsing StashDB scenes and manually managing downloads in Whisparr is tedious; 
 
 Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes exist in local Stash or are available in Whisparr.
 
+## Requirements
+
+- Whisparr v3 (only v3 is supported)
+- Tampermonkey browser extension
+
 ## Setup
 
 1. Install Tampermonkey
@@ -16,7 +21,7 @@ Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes
 4. Visit StashDB.org → Click any scene
 5. Click **Settings** button → Configure:
    - Whisparr URL + API key
-   - Whisparr Root Folder Path
+   - Whisparr Root Folder(s) - Select one or more root folders (if multiple, you'll be prompted to choose when adding scenes)
    - Stash URL + API key
    - Cloudflare Zero Trust credentials (if using):
      - CF-Access-Client-Id
