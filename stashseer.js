@@ -90,16 +90,10 @@ const Validator = {
   },
 };
 
-// Get current configuration
-const config = getConfig();
-const whisparrBaseUrl = config.whisparrBaseUrl;
-const whisparrApiKey = config.whisparrApiKey;
-const whisparrRootFolders = config.whisparrRootFolders || []; // Array of root folders
-const localStashRootUrl = config.localStashRootUrl;
-const localStashGraphQlEndpoint = `${localStashRootUrl}/graphql`;
-const localStashAuthHeaders = { ApiKey: config.stashApiKey };
-const cfAccessClientId = config.cfAccessClientId || '';
-const cfAccessClientSecret = config.cfAccessClientSecret || '';
+// Helper to get fresh config (used dynamically instead of caching)
+function getFreshConfig() {
+  return getConfig();
+}
 
 (async function () {
   'use strict';
@@ -338,12 +332,12 @@ body {
   }
 
   /** Test connection to Whisparr and optionally fetch root folders. */
-  async function testWhisparrConnectionAndFolders() {
+  async function testWhisparrConnectionAndFolders(config = null) {
     // Try fetching root folders; this also validates API key and URL
     const folders = await fetchWhisparr('/rootfolder', {
       retryAttempts: 1,
       retryOnStatus: [429, 500, 502, 503, 504],
-    });
+    }, config);
     if (!Array.isArray(folders)) {
       throw new Error('Unexpected response for root folders');
     }
@@ -354,12 +348,12 @@ body {
    * Some GraphQL servers return HTTP 400 for schema errors but still indicate reachability.
    * We accept 400 when the payload looks like a GraphQL error response.
    */
-  async function testStashConnection() {
+  async function testStashConnection(config = null) {
     try {
       const res = await localStashGraphQl({
         variables: {},
         query: `query { __typename }`,
-      });
+      }, config);
       if (!res || typeof res !== 'object') {
         throw new Error('Invalid GraphQL response');
       }
@@ -743,11 +737,25 @@ body {
         testResults.appendChild(line);
       };
       try {
-        // Run both tests in parallel
+        // Read form values to build config for testing
+        const formData = new FormData(form);
+        const testConfig = {
+          whisparrBaseUrl: formData.get('whisparrBaseUrl'),
+          whisparrApiKey: formData.get('whisparrApiKey'),
+          localStashRootUrl: formData.get('localStashRootUrl'),
+          stashApiKey: formData.get('stashApiKey'),
+          whisparrRootFolders: currentConfig.whisparrRootFolders || [], // Use current saved folders for checkbox state
+          cfAccessClientId: formData.get('cfAccessClientId'),
+          cfAccessClientSecret: formData.get('cfAccessClientSecret'),
+          whisparrNeedsCloudflare: formData.get('whisparrNeedsCloudflare') === 'on',
+          stashNeedsCloudflare: formData.get('stashNeedsCloudflare') === 'on',
+        };
+        
+        // Run both tests in parallel with dynamic config
         const [whisparrRes, stashRes] = await Promise.all([
           (async () => {
             try {
-              const folders = await testWhisparrConnectionAndFolders();
+              const folders = await testWhisparrConnectionAndFolders(testConfig);
               return { ok: true, folders };
             } catch (e) {
               return { ok: false, error: e };
@@ -755,7 +763,7 @@ body {
           })(),
           (async () => {
             try {
-              await testStashConnection();
+              await testStashConnection(testConfig);
               return { ok: true };
             } catch (e) {
               return { ok: false, error: e };
@@ -1786,25 +1794,41 @@ body {
     }
   }
 
-  const fetchWhisparr = factoryFetchApi(
-    `${whisparrBaseUrl}/api/v3/`, 
-    { 'X-Api-Key': whisparrApiKey },
-    config.whisparrNeedsCloudflare
-  );
+  // Create fetch functions that read config dynamically
+  function fetchWhisparr(subPath, options = {}, config = null) {
+    const cfg = config || getFreshConfig();
+    const fetchFn = factoryFetchApi(
+      `${cfg.whisparrBaseUrl}/api/v3/`, 
+      { 'X-Api-Key': cfg.whisparrApiKey },
+      cfg.whisparrNeedsCloudflare,
+      15000,
+      cfg.cfAccessClientId,
+      cfg.cfAccessClientSecret
+    );
+    return fetchFn(subPath, options);
+  }
 
-  const fetchLocalStash = factoryFetchApi(
-    localStashGraphQlEndpoint,
-    localStashAuthHeaders,
-    config.stashNeedsCloudflare
-  );
+  function fetchLocalStash(subPath, options = {}, config = null) {
+    const cfg = config || getFreshConfig();
+    const fetchFn = factoryFetchApi(
+      `${cfg.localStashRootUrl}/graphql`,
+      { ApiKey: cfg.stashApiKey },
+      cfg.stashNeedsCloudflare,
+      15000,
+      cfg.cfAccessClientId,
+      cfg.cfAccessClientSecret
+    );
+    return fetchFn(subPath, options);
+  }
 
   /**
    * Executes a GraphQL query against the local Stash instance
    * @param {Object} request - GraphQL request object with query and variables
+   * @param {Object|null} config - Optional config object to use instead of saved config
    * @returns {Promise<Object>} GraphQL response
    */
-  async function localStashGraphQl(request) {
-    return fetchLocalStash('', { body: request });
+  async function localStashGraphQl(request, config = null) {
+    return fetchLocalStash('', { body: request }, config);
   }
 
   /**
@@ -1835,7 +1859,7 @@ body {
    * @param {number} defaultTimeoutMs - Default timeout in milliseconds
    * @returns {Function} Fetch wrapper function
    */
-  function factoryFetchApi(baseUrl, defaultHeaders, addCloudflareHeaders = false, defaultTimeoutMs = 15000) {
+  function factoryFetchApi(baseUrl, defaultHeaders, addCloudflareHeaders = false, defaultTimeoutMs = 15000, cfAccessClientId = null, cfAccessClientSecret = null) {
     return async (subPath, options = {}) => {
       const retryAttempts = Number.isFinite(options.retryAttempts) ? options.retryAttempts : 2;
       const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : 1000;
