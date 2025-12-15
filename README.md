@@ -2,7 +2,7 @@
 
 Tampermonkey script for StashDB integration with Whisparr and Stash.
 
-Browsing StashDB scenes and manually managing downloads in Whisparr is tedious; this script adds download/monitor/play buttons directly to StashDB pages so you can manage content without leaving the browser.
+Browsing StashDB scenes and manually managing downloads in Whisparr is tedious; this script adds download/monitor/play buttons directly to StashDB pages so you can add content without leaving the browser.
 
 ## What
 
