@@ -219,13 +219,13 @@ body {
 }
 
 .downloadInWhisparr button.btn-stash {
-  background: rgba(139, 90, 43, 0.15);
+  background: transparent;
   border-color: rgba(139, 90, 43, 0.3);
   color: #d4a574;
 }
 
 .downloadInWhisparr button.btn-stash:hover {
-  background: rgba(139, 90, 43, 0.25);
+  background: transparent;
   border-color: rgba(139, 90, 43, 0.5);
 }
 
@@ -520,14 +520,16 @@ body {
     whisparrButtonElm.innerHTML = `${icons.whisparr}<span>Whisparr</span>`;
     whisparrButtonElm.classList.add('btn-whisparr');
     whisparrButtonElm.addEventListener('click', () => {
-      openInNewTab(whisparrBaseUrl);
+      const config = getFreshConfig();
+      openInNewTab(config.whisparrBaseUrl);
     });
 
     // Add Stash button
     stashButtonElm.innerHTML = `${icons.stash}<span>Stash</span>`;
     stashButtonElm.classList.add('btn-stash');
     stashButtonElm.addEventListener('click', () => {
-      openInNewTab(localStashRootUrl);
+      const config = getFreshConfig();
+      openInNewTab(config.localStashRootUrl);
     });
 
     // Add Settings button
@@ -1086,7 +1088,8 @@ body {
             if (movie && movie.hasFile) {
               const localStashSceneId = await getLocalStashSceneId(movie);
               if (localStashSceneId) {
-                const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
+                const config = getFreshConfig();
+                const stashUrl = `${config.localStashRootUrl}/scenes/${localStashSceneId}`;
                 updateStatus({
                   button: `${icons.play}<span>Play</span>`,
                   className: 'btn-play',
@@ -1203,7 +1206,8 @@ body {
         });
         return;
       }
-      const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
+      const config = getFreshConfig();
+      const stashUrl = `${config.localStashRootUrl}/scenes/${localStashSceneId}`;
       updateStatus({
         button: `${icons.play}<span>Play</span>`,
         className: 'btn-play',
@@ -1376,7 +1380,8 @@ body {
 
     const localStashSceneId = await checkStashAvailability(stashId);
     if (localStashSceneId) {
-      const stashUrl = `${localStashRootUrl}/scenes/${localStashSceneId}`;
+      const config = getFreshConfig();
+      const stashUrl = `${config.localStashRootUrl}/scenes/${localStashSceneId}`;
       updateStatus({
         button: `${icons.play}<span>Play</span>`,
         className: 'btn-play',
