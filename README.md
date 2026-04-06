@@ -2,11 +2,19 @@
 
 Tampermonkey script for StashDB integration with Whisparr and Stash.
 
-Browsing StashDB scenes and manually managing downloads in Whisparr is tedious; this script adds download/monitor/play buttons directly to StashDB pages so you can add content without leaving the browser.
-
 ## What
 
 Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes exist in local Stash or are available in Whisparr.
+
+## Usage
+
+Browse StashDB scenes, buttons show:
+- **Play** - Scene exists in local Stash
+- **Download** - Available to download via Whisparr
+- **Monitor** - Enable monitoring (auto-triggers search)
+- **Monitored** - Already being monitored
+- **Downloading** - Currently in queue
+- **Previously Added** - Scene was added to Whisparr but file was deleted (click to re-monitor)
 
 ## Requirements
 
@@ -29,15 +37,6 @@ Adds download/monitor/play buttons to StashDB scene pages. Auto-checks if scenes
      - Enable Cloudflare for Whisparr and/or Stash as needed
 6. If using Cloudflare Zero Trust, ensure your application settings allow stashdb.org in CORS settings
 
-## Usage
-
-Browse StashDB scenes, buttons show:
-- **Play** - Scene exists in local Stash
-- **Download** - Available to download via Whisparr
-- **Monitor** - Enable monitoring (auto-triggers search)
-- **Monitored** - Already being monitored
-- **Downloading** - Currently in queue
-- **Previously Added** - Scene was added to Whisparr but file was deleted (click to re-monitor)
 
 ---
 
