@@ -14,7 +14,10 @@ Browse StashDB scenes, buttons show:
 - **Monitor** - Enable monitoring (auto-triggers search)
 - **Monitored** - Already being monitored
 - **Downloading** - Currently in queue
-- **Previously Added** - Scene was added to Whisparr but file was deleted (click to re-monitor)
+- **Previously Added** - Scene was added to Whisparr but file was deleted in Stash (aslong as "Unmonitor Deleted Movies" is set) (click to re-monitor) 
+
+   <img width="761" height="107" alt="image" src="https://github.com/user-attachments/assets/de1f687c-8fd8-470b-8115-2ffd15ab5803" />
+
 
 ## Requirements
 
