@@ -95,6 +95,15 @@ function getFreshConfig() {
   return getConfig();
 }
 
+function isWhisparrConfigured(cfg) {
+  return !!(cfg && cfg.whisparrBaseUrl && cfg.whisparrApiKey &&
+            Array.isArray(cfg.whisparrRootFolders) && cfg.whisparrRootFolders.length > 0);
+}
+
+function isStashConfigured(cfg) {
+  return !!(cfg && cfg.localStashRootUrl && cfg.stashApiKey);
+}
+
 (async function () {
   'use strict';
 
@@ -595,6 +604,9 @@ body {
     }
 
     updateStatus('Loading...');
+    const _initCfg = getFreshConfig();
+    if (!isWhisparrConfigured(_initCfg)) whisparrButtonElm.style.display = 'none';
+    if (!isStashConfigured(_initCfg)) stashButtonElm.style.display = 'none';
     containerElm.appendChild(dlButtonElm);
     containerElm.appendChild(whisparrButtonElm);
     containerElm.appendChild(stashButtonElm);
@@ -753,27 +765,37 @@ body {
           stashNeedsCloudflare: formData.get('stashNeedsCloudflare') === 'on',
         };
         
-        // Run both tests in parallel with dynamic config
+        const whisparrFilled = !!(testConfig.whisparrBaseUrl && testConfig.whisparrApiKey);
+        const stashFilled = !!(testConfig.localStashRootUrl && testConfig.stashApiKey);
+
+        // Run tests only for services that have credentials filled in
         const [whisparrRes, stashRes] = await Promise.all([
-          (async () => {
-            try {
-              const folders = await testWhisparrConnectionAndFolders(testConfig);
-              return { ok: true, folders };
-            } catch (e) {
-              return { ok: false, error: e };
-            }
-          })(),
-          (async () => {
-            try {
-              await testStashConnection(testConfig);
-              return { ok: true };
-            } catch (e) {
-              return { ok: false, error: e };
-            }
-          })(),
+          whisparrFilled
+            ? (async () => {
+                try {
+                  const folders = await testWhisparrConnectionAndFolders(testConfig);
+                  return { ok: true, folders };
+                } catch (e) {
+                  return { ok: false, error: e };
+                }
+              })()
+            : Promise.resolve({ ok: true, skipped: true }),
+          stashFilled
+            ? (async () => {
+                try {
+                  await testStashConnection(testConfig);
+                  return { ok: true };
+                } catch (e) {
+                  return { ok: false, error: e };
+                }
+              })()
+            : Promise.resolve({ ok: true, skipped: true }),
         ]);
 
-        if (whisparrRes.ok) {
+        if (!whisparrFilled) {
+          addLine(true, 'Whisparr', 'Skipped (not configured)');
+          rootFolderSelectRow.style.display = 'none';
+        } else if (whisparrRes.ok) {
           addLine(true, 'Whisparr', 'Connected');
           // Populate folders as checkboxes
           rootFolderCheckboxes.innerHTML = '';
@@ -782,16 +804,16 @@ body {
             const label = document.createElement('label');
             label.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer; margin: 0.25rem 0;';
             label.style.color = 'white';
-            
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = f.path;
             checkbox.checked = currentSelected.includes(f.path);
             checkbox.style.cssText = 'width: 1.25rem; height: 1.25rem; cursor: pointer;';
-            
+
             const span = document.createElement('span');
             span.textContent = f.path;
-            
+
             label.appendChild(checkbox);
             label.appendChild(span);
             rootFolderCheckboxes.appendChild(label);
@@ -802,20 +824,26 @@ body {
           rootFolderSelectRow.style.display = 'none';
         }
 
-        if (stashRes.ok) {
+        if (!stashFilled) {
+          addLine(true, 'Stash', 'Skipped (not configured)');
+        } else if (stashRes.ok) {
           addLine(true, 'Stash', 'Connected');
         } else {
           addLine(false, 'Stash', formatUserError(stashRes.error));
         }
 
-        // Only allow Save when both services are OK and at least one root folder is selected
+        // Allow Save when at least one service is configured+OK, and root folders selected if Whisparr is configured+OK
         const updateSaveButton = () => {
           const selectedFolders = Array.from(rootFolderCheckboxes.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-          const canShowSave = !!(whisparrRes.ok && stashRes.ok && selectedFolders.length > 0);
+          const whisparrOk = !whisparrFilled || whisparrRes.ok;
+          const stashOk = !stashFilled || stashRes.ok;
+          const atLeastOne = (whisparrFilled && whisparrRes.ok) || (stashFilled && stashRes.ok);
+          const rootFolderOk = !(whisparrFilled && whisparrRes.ok) || selectedFolders.length > 0;
+          const canShowSave = !!(atLeastOne && whisparrOk && stashOk && rootFolderOk);
           setSaveVisibility(canShowSave);
           setSaveEnabled(canShowSave);
         };
-        
+
         // Update save button when checkboxes change
         rootFolderCheckboxes.addEventListener('change', updateSaveButton);
         updateSaveButton();
@@ -845,28 +873,37 @@ body {
         stashNeedsCloudflare: formData.get('stashNeedsCloudflare') === 'on',
       };
 
-      // Validate required fields
-      if (!newConfig.whisparrBaseUrl || !newConfig.whisparrApiKey) {
-        alert('Whisparr Base URL and API Key are required!');
+      // Validate per-service: if any field is filled for a service, require the full pair + valid URL
+      if (newConfig.whisparrBaseUrl || newConfig.whisparrApiKey) {
+        if (!newConfig.whisparrBaseUrl || !newConfig.whisparrApiKey) {
+          alert('Both Whisparr URL and API Key are required when configuring Whisparr.');
+          return;
+        }
+        try { new URL(newConfig.whisparrBaseUrl); } catch (_) {
+          alert('Invalid Whisparr URL format!');
+          return;
+        }
+      }
+
+      if (newConfig.localStashRootUrl || newConfig.stashApiKey) {
+        if (!newConfig.localStashRootUrl || !newConfig.stashApiKey) {
+          alert('Both Stash URL and API Key are required when configuring Stash.');
+          return;
+        }
+        try { new URL(newConfig.localStashRootUrl); } catch (_) {
+          alert('Invalid Stash URL format!');
+          return;
+        }
+      }
+
+      // At least one service must be configured
+      if (!newConfig.whisparrApiKey && !newConfig.stashApiKey) {
+        alert('Please configure at least one service (Whisparr or Stash).');
         return;
       }
 
-      if (!newConfig.localStashRootUrl || !newConfig.stashApiKey) {
-        alert('Stash Root URL and API Key are required!');
-        return;
-      }
-
-      // Validate URL format
-      try {
-        new URL(newConfig.whisparrBaseUrl);
-        new URL(newConfig.localStashRootUrl);
-      } catch (error) {
-        alert('Invalid URL format! Please check your URLs.');
-        return;
-      }
-
-      // Ensure user has tested and selected at least one root folder before saving
-      if (selectedFolders.length === 0) {
+      // Root folders required only when Whisparr is configured
+      if (newConfig.whisparrApiKey && selectedFolders.length === 0) {
         alert('Please run Test Connections and select at least one Whisparr root folder before saving.');
         return;
       }
@@ -1371,29 +1408,54 @@ body {
 
   /** Check availability in Stash first, then Whisparr. */
   async function checkIfAvailable(stashId, updateStatus) {
-    // First check if scene already exists in Stash
-    updateStatus({
-      button: `${icons.loading}<span>Checking Stash...</span>`,
-      className: 'btn-loading',
-      extra: '',
-    });
+    const cfg = getFreshConfig();
+    const stashEnabled = isStashConfigured(cfg);
+    const whisparrEnabled = isWhisparrConfigured(cfg);
 
-    const localStashSceneId = await checkStashAvailability(stashId);
-    if (localStashSceneId) {
-      const config = getFreshConfig();
-      const stashUrl = `${config.localStashRootUrl}/scenes/${localStashSceneId}`;
+    if (!stashEnabled && !whisparrEnabled) {
       updateStatus({
-        button: `${icons.play}<span>Play</span>`,
-        className: 'btn-play',
-        extra: '',
-        onClick: () => {
-          openInNewTab(stashUrl);
-        },
+        button: `${icons.settings}<span>Not Configured</span>`,
+        className: 'btn-settings',
+        extra: 'Open Settings to configure Whisparr or Stash',
+        onClick: () => showSettingsDialog(),
       });
       return;
     }
 
-    // If not in Stash, check Whisparr status
+    // Check Stash first (only if configured)
+    if (stashEnabled) {
+      updateStatus({
+        button: `${icons.loading}<span>Checking Stash...</span>`,
+        className: 'btn-loading',
+        extra: '',
+      });
+
+      const localStashSceneId = await checkStashAvailability(stashId);
+      if (localStashSceneId) {
+        const stashUrl = `${cfg.localStashRootUrl}/scenes/${localStashSceneId}`;
+        updateStatus({
+          button: `${icons.play}<span>Play</span>`,
+          className: 'btn-play',
+          extra: '',
+          onClick: () => {
+            openInNewTab(stashUrl);
+          },
+        });
+        return;
+      }
+    }
+
+    // If not found in Stash (or Stash not configured), check Whisparr
+    if (!whisparrEnabled) {
+      // Only Stash was configured and scene wasn't found there
+      updateStatus({
+        button: `${icons.monitor}<span>Not in Stash</span>`,
+        className: 'btn-monitor',
+        extra: '',
+      });
+      return;
+    }
+
     updateStatus({
       button: `${icons.loading}<span>Checking Whisparr...</span>`,
       className: 'btn-loading',
@@ -1412,15 +1474,15 @@ body {
             updateStatus({
               button: `${icons.loading}<span>Enabling monitoring...</span>`,
               className: 'btn-loading',
-          extra: '',
+              extra: '',
             });
             try {
               await monitorScene(true, existingScene);
-            updateStatus({
+              updateStatus({
                 button: `${icons.monitor}<span>Monitored</span>`,
                 className: 'btn-monitor',
-          extra: '',
-            });
+                extra: '',
+              });
             } catch (error) {
               ErrorHandler.handleApiError('enabling monitoring', error, updateStatus);
             }
@@ -1438,12 +1500,12 @@ body {
           onClick: async () => {
             updateStatus({
               button: `${icons.loading}<span>Adding to Whisparr...</span>`,
-          className: 'btn-loading',
-          extra: '',
-        });
+              className: 'btn-loading',
+              extra: '',
+            });
             try {
               const whisparrScene = await ensureSceneAddedAsMonitored(stashId);
-              
+
               if (whisparrScene.hasFile) {
                 await handleSceneWithFile(whisparrScene, updateStatus);
               } else {
